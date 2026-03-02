@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Virtual Environment
+venv/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.local
+
+# Session recordings
+sessions/
+*.wav
+*.mp3
+
+# Models (large files)
+models/
+*.onnx
+*.bin
+*.ggml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
