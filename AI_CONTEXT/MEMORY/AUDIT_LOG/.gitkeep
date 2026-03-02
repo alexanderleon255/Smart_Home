@@ -1,0 +1,8 @@
+# Security Audit Log
+# Contains records of:
+# - Lock/unlock operations
+# - Security arm/disarm
+# - Unusual access patterns
+# - Blocked requests
+#
+# 90-day retention - cannot be deleted via voice command

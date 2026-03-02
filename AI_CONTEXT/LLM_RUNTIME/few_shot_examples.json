@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "description": "Few-shot examples for consistent LLM behavior",
+  
+  "examples": [
+    {
+      "category": "device_control",
+      "user": "Turn on the living room lights",
+      "assistant": {
+        "thought": "User wants to turn on living room lights. Entity is light.living_room_ceiling.",
+        "tool_call": {
+          "name": "control_device",
+          "arguments": {
+            "entity_id": "light.living_room_ceiling",
+            "action": "turn_on"
+          }
+        },
+        "response": "Done. Living room lights are on."
+      }
+    },
+    {
+      "category": "device_control_with_params",
+      "user": "Set the bedroom lights to 50%",
+      "assistant": {
+        "thought": "User wants bedroom lights dimmed to 50%. Entity is light.bedroom_ceiling.",
+        "tool_call": {
+          "name": "control_device",
+          "arguments": {
+            "entity_id": "light.bedroom_ceiling",
+            "action": "turn_on",
+            "attributes": {
+              "brightness_pct": 50
+            }
+          }
+        },
+        "response": "Bedroom lights set to 50%."
+      }
+    },
+    {
+      "category": "entity_not_found",
+      "user": "Turn on the garage lights",
+      "assistant": {
+        "thought": "User wants garage lights, but I don't see 'garage' in my entity registry.",
+        "tool_call": null,
+        "response": "I don't see a light called 'garage' in my devices. I have: living room ceiling, bedroom ceiling. Did you mean one of those, or is the garage light not connected yet?"
+      }
+    },
+    {
+      "category": "weather_query",
+      "user": "What's the weather?",
+      "assistant": {
+        "thought": "User wants current weather.",
+        "tool_call": {
+          "name": "get_weather",
+          "arguments": {
+            "type": "current"
+          }
+        },
+        "response": "It's 52°F and partly cloudy. High of 65° today with a 20% chance of afternoon showers. Need an umbrella? Probably not, but maybe keep one handy."
+      }
+    },
+    {
+      "category": "traffic_query",
+      "user": "How's traffic to work?",
+      "assistant": {
+        "thought": "User asking about commute. Need to use their configured work address.",
+        "tool_call": {
+          "name": "get_traffic",
+          "arguments": {
+            "destination": "work_alex"
+          }
+        },
+        "response": "Your commute looks good - about 25 minutes via I-5. No incidents reported. You'd want to leave by 8:35 to arrive by 9."
+      }
+    },
+    {
+      "category": "lock_unlock_confirmation",
+      "user": "Unlock the front door",
+      "assistant": {
+        "thought": "Security-sensitive action - must confirm before unlocking.",
+        "tool_call": null,
+        "response": "Are you sure you want to unlock the front door? Say 'yes' to confirm."
+      }
+    },
+    {
+      "category": "lock_unlock_confirmed",
+      "context": "User previously asked to unlock front door",
+      "user": "Yes",
+      "assistant": {
+        "thought": "User confirmed unlock request.",
+        "tool_call": {
+          "name": "control_lock",
+          "arguments": {
+            "entity_id": "lock.front_door",
+            "action": "unlock"
+          }
+        },
+        "response": "Front door unlocked. Don't forget to lock it when you're done!"
+      }
+    },
+    {
+      "category": "web_search",
+      "user": "Find me a good Thai restaurant nearby",
+      "assistant": {
+        "thought": "User wants local restaurant recommendations. Will search and summarize.",
+        "tool_call": {
+          "name": "search_web",
+          "arguments": {
+            "query": "best Thai restaurant near [location]",
+            "search_type": "local",
+            "num_results": 5
+          }
+        },
+        "response": "I found a few options:\n• Thai Ginger (4.5★, 1.2 mi) - Known for great pad thai\n• Bahn Thai (4.3★, 1.8 mi) - Authentic northern Thai\n• Siam Palace (4.4★, 0.9 mi) - Good lunch specials\n\nWant more details on any of these?"
+      }
+    },
+    {
+      "category": "preference_learning",
+      "user": "Actually, I like the lights at 40% for movies, not 30%",
+      "assistant": {
+        "thought": "User is correcting a preference. Should save this.",
+        "tool_call": {
+          "name": "create_memory",
+          "arguments": {
+            "type": "preference",
+            "content": "Alex prefers lights at 40% for movie watching, not 30%",
+            "user": "alex",
+            "keywords": ["movie", "lights", "brightness", "40%"]
+          }
+        },
+        "response": "Got it! I'll remember 40% for movie time from now on."
+      }
+    },
+    {
+      "category": "morning_briefing",
+      "user": "Good morning",
+      "assistant": {
+        "thought": "Morning greeting triggers briefing routine.",
+        "tool_call": [
+          {"name": "get_weather", "arguments": {"type": "current"}},
+          {"name": "get_traffic", "arguments": {"destination": "work_alex"}}
+        ],
+        "response": "Good morning! It's 48°F heading up to 62° today - looks like a nice one. Your commute shows 23 minutes, no delays. You've got a 10 AM team standup. Anything else before you head out?"
+      }
+    },
+    {
+      "category": "ambiguous_device",
+      "user": "Turn off the lamp",
+      "assistant": {
+        "thought": "User said 'lamp' but I have multiple lamps. Need to clarify.",
+        "tool_call": null,
+        "response": "Which lamp? I have the living room lamp and the bedroom bedside lamps."
+      }
+    },
+    {
+      "category": "scene_activation",
+      "user": "Movie time",
+      "assistant": {
+        "thought": "User wants movie scene. Using their preference of 40% lights.",
+        "tool_call": {
+          "name": "run_scene",
+          "arguments": {
+            "scene_id": "movie"
+          }
+        },
+        "response": "Movie mode activated. Living room lights at 40%, other lights off. Enjoy!"
+      }
+    }
+  ]
+}

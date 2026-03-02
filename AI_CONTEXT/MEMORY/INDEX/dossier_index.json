@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-03-02",
+  "description": "Keyword-to-dossier mapping for RAG-lite retrieval",
+  
+  "dossiers": [
+    {
+      "id": "D001",
+      "title": "Example: Alex's Movie Preferences",
+      "path": "MEMORY/DOSSIERS/PREFERENCES/D001_Alex_Movie_Mode.md",
+      "keywords": ["movie", "film", "watch", "netflix", "tv", "dim", "theater", "lights", "40%"],
+      "user": "alex",
+      "type": "preference",
+      "expires": null,
+      "token_count": 180,
+      "created": "2026-03-02",
+      "updated": "2026-03-02"
+    }
+  ],
+  
+  "statistics": {
+    "total_dossiers": 1,
+    "by_type": {
+      "preference": 1,
+      "research": 0,
+      "device": 0,
+      "routine": 0
+    },
+    "total_tokens": 180
+  },
+  
+  "keyword_index": {
+    "movie": ["D001"],
+    "film": ["D001"],
+    "watch": ["D001"],
+    "netflix": ["D001"],
+    "tv": ["D001"],
+    "dim": ["D001"],
+    "theater": ["D001"],
+    "lights": ["D001"],
+    "40%": ["D001"]
+  }
+}

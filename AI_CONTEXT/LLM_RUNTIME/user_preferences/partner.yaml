@@ -1,0 +1,64 @@
+# User Preferences: Partner
+# Daily user
+
+identity:
+  name: Partner  # Update with actual name
+  role: user
+  voice_id: null  # TBD: voice fingerprint for identification
+
+# Schedule
+schedule:
+  wake_time_weekday: "07:00"
+  wake_time_weekend: "08:30"
+  sleep_time: "22:30"
+  work_hours: "09:00-17:00"
+
+# Locations
+locations:
+  work_address: "[TBD - configure]"
+
+# Comfort preferences
+comfort:
+  temperature:
+    daytime: 72
+    sleeping: 68
+    away: 65
+  lighting:
+    morning_brightness: 70
+    evening_brightness: 50
+    color_temp_preference: "warm"
+
+# Information preferences
+information:
+  stock_watchlist: []  # Add if interested
+  news_topics: []
+  weather_detail_level: "brief"
+
+# Notification preferences
+notifications:
+  morning_briefing: true
+  traffic_alerts: true
+  package_notifications: true
+  security_alerts: true
+  battery_warnings: false
+
+# Voice interaction preferences
+voice:
+  verbosity: "concise"
+  confirmation_style: "brief"
+  humor: "occasional"
+
+# Device preferences
+devices:
+  default_music_speaker: null
+  default_tv: null
+
+# Privacy
+privacy:
+  share_calendar: false
+  share_location: true
+  voice_recording_consent: true
+
+# Notes
+# - Update name when deploying
+# - Adjust preferences based on actual usage

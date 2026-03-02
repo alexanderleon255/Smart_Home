@@ -1,0 +1,73 @@
+# User Preferences: Alex
+# Primary administrator
+
+identity:
+  name: Alex
+  role: admin
+  voice_id: null  # TBD: voice fingerprint for identification
+
+# Schedule
+schedule:
+  wake_time_weekday: "06:30"
+  wake_time_weekend: "08:00"
+  sleep_time: "22:30"
+  work_hours: "09:00-17:00"
+
+# Locations
+locations:
+  work_address: "[TBD - configure]"
+  # Used for traffic queries
+
+# Comfort preferences
+comfort:
+  temperature:
+    daytime: 72
+    sleeping: 68
+    away: 65
+  lighting:
+    morning_brightness: 80
+    evening_brightness: 60
+    movie_brightness: 30
+    color_temp_preference: "warm"  # warm (2700K) vs cool (5000K)
+
+# Information preferences
+information:
+  stock_watchlist:
+    - "AAPL"
+    - "GOOGL"
+    - "MSFT"
+    # Add more tickers as needed
+  news_topics:
+    - "technology"
+    - "science"
+  weather_detail_level: "full"  # brief, full, detailed
+
+# Notification preferences
+notifications:
+  morning_briefing: true
+  traffic_alerts: true
+  package_notifications: true
+  security_alerts: true
+  battery_warnings: true
+
+# Voice interaction preferences
+voice:
+  verbosity: "concise"  # concise, normal, detailed
+  confirmation_style: "brief"  # brief, detailed
+  humor: "occasional"  # none, occasional, frequent
+
+# Device preferences
+devices:
+  default_music_speaker: null  # TBD: entity_id
+  default_tv: null  # TBD: entity_id
+
+# Privacy
+privacy:
+  share_calendar: true
+  share_location: true
+  voice_recording_consent: true
+
+# Notes
+# - This file is loaded when Alex is identified as the speaker
+# - Preferences override system defaults
+# - Updated manually or via "remember that I prefer..." commands

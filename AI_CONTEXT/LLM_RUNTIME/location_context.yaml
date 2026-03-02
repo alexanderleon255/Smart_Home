@@ -1,0 +1,51 @@
+# Location Context
+# Geographic and temporal context for the Smart Home
+
+location:
+  city: "[TBD - City]"
+  state: "[TBD - State]"
+  country: "USA"
+  timezone: "America/Los_Angeles"
+  
+  # Coordinates for weather/local search (optional)
+  latitude: null
+  longitude: null
+
+# Home details
+home:
+  type: "[TBD - House/Apartment/Condo]"
+  floors: 1
+  has_garage: true
+  has_basement: false
+  has_yard: true
+
+# Commute destinations
+destinations:
+  alex_work:
+    name: "Alex's Work"
+    address: "[TBD - address]"
+    typical_commute_minutes: 25
+  partner_work:
+    name: "Partner's Work"
+    address: "[TBD - address]"
+    typical_commute_minutes: 30
+
+# Local context
+local:
+  electric_utility: "[TBD]"
+  # Time-of-use rate windows (for energy optimization)
+  peak_hours_start: "16:00"
+  peak_hours_end: "21:00"
+  
+  # Weather station (for outdoor sensors)
+  weather_station_id: null
+
+# Emergency contacts (for future use)
+emergency:
+  non_emergency_police: null
+  poison_control: "1-800-222-1222"
+
+# Notes
+# - Fill in actual values before deployment
+# - Coordinates enable precise weather and local search
+# - Utility info enables energy cost optimization
