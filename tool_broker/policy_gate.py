@@ -17,6 +17,21 @@ class PolicyDecision:
 class PolicyGate:
     """Narrow execution policy gate for allowlist and risk controls."""
 
+    # Direct tool names that are inherently high-risk
+    HIGH_RISK_TOOLS = {
+        "lock_door",
+        "unlock_door",
+        "arm_alarm",
+        "disarm_alarm",
+        "open_garage",
+    }
+
+    # Domains that are destructive/high-risk
+    HIGH_RISK_DOMAINS = {"lock", "alarm_control_panel", "cover"}
+
+    # Dangerous services across all domains
+    HIGH_RISK_SERVICES = {"lock", "unlock", "arm", "disarm", "open", "close"}
+
     def __init__(
         self,
         allowed_tools: Iterable[str],
@@ -28,14 +43,21 @@ class PolicyGate:
         self.high_risk_end_hour = high_risk_end_hour
 
     def _is_high_risk(self, tool_name: str, arguments: Dict[str, Any]) -> bool:
-        if tool_name != "ha_service_call":
-            return False
-        domain = str(arguments.get("domain", "")).lower()
-        service = str(arguments.get("service", "")).lower()
-        if domain in {"lock", "alarm_control_panel", "cover"}:
+        """Check if a tool call is high-risk and requires confirmation."""
+        # Direct tool name check
+        if tool_name in self.HIGH_RISK_TOOLS:
             return True
-        if service in {"unlock", "open_cover", "disarm"}:
-            return True
+
+        # Service call domain/service checks
+        if tool_name == "ha_service_call":
+            domain = str(arguments.get("domain", "")).lower()
+            service = str(arguments.get("service", "")).lower()
+
+            if domain in self.HIGH_RISK_DOMAINS:
+                return True
+            if service in self.HIGH_RISK_SERVICES:
+                return True
+
         return False
 
     def evaluate_execute(self, tool_name: str, arguments: Dict[str, Any]) -> PolicyDecision:

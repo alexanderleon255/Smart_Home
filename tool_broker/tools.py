@@ -120,21 +120,23 @@ def get_tool_list_for_prompt() -> str:
 
 def is_high_risk_action(tool_name: str, arguments: dict) -> bool:
     """
-    Check if a tool call represents a high-risk action
-    that requires user confirmation.
+    Check if a tool call represents a high-risk action that requires confirmation.
+    
+    Deprecated: Use PolicyGate._is_high_risk() instead for centralized risk detection.
+    This function is kept for backward compatibility with /v1/process endpoint.
     """
+    # Check if tool_name is directly high-risk
     if tool_name in HIGH_RISK_TOOLS:
         return True
     
+    # Check if this is a service call with high-risk domain/service
     if tool_name == "ha_service_call":
         domain = arguments.get("domain", "")
         service = arguments.get("service", "")
         
-        # Check if domain is high-risk
         if domain in HIGH_RISK_DOMAINS:
             return True
         
-        # Check specific dangerous services
         if service in ("lock", "unlock", "arm", "disarm", "open", "close"):
             return True
     
