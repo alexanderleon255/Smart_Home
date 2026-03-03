@@ -1,5 +1,11 @@
 """Memory layer for semantic search and long-term storage."""
 
-from .vector_store import VectorMemory
+from .structured_state import StructuredStateStore
+from .event_log import EventLogStore
 
-__all__ = ["VectorMemory"]
+try:
+    from .vector_store import VectorMemory
+except Exception:
+    VectorMemory = None
+
+__all__ = ["VectorMemory", "StructuredStateStore", "EventLogStore"]

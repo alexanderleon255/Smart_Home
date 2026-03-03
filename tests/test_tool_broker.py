@@ -393,6 +393,165 @@ async def test_process_valid_request(client):
     assert "confidence" in data
 
 
+@pytest.mark.asyncio
+async def test_api_key_auth_enforced_on_protected_endpoints():
+    """Protected endpoints should require X-API-Key when configured."""
+    from httpx import ASGITransport
+    from tool_broker import main as main_module
+
+    original_key = main_module.config.broker_api_key
+    main_module.config.broker_api_key = "integration-test-key"
+
+    try:
+        with patch("tool_broker.main.llm_client") as mock_llm, \
+             patch("tool_broker.main.ha_client") as mock_ha, \
+             patch("tool_broker.main.entity_validator") as mock_validator:
+            mock_llm.process = AsyncMock(return_value=ToolCall(
+                type=ToolCallType.TOOL_CALL,
+                tool_name="ha_service_call",
+                arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                confidence=0.95,
+            ))
+
+            mock_ha.call_service = AsyncMock(return_value=[])
+            mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                # /v1/process should reject missing key
+                response = await ac.post("/v1/process", json={"text": "Turn on living room light"})
+                assert response.status_code == 401
+
+                # /v1/process should accept valid key
+                response = await ac.post(
+                    "/v1/process",
+                    json={"text": "Turn on living room light"},
+                    headers={"X-API-Key": "integration-test-key"},
+                )
+                assert response.status_code == 200
+
+                # /v1/execute should reject missing key
+                response = await ac.post(
+                    "/v1/execute",
+                    json={
+                        "type": "tool_call",
+                        "tool_name": "ha_service_call",
+                        "arguments": {"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                        "confidence": 0.95,
+                    },
+                )
+                assert response.status_code == 401
+
+                # /v1/execute should accept valid key
+                response = await ac.post(
+                    "/v1/execute",
+                    json={
+                        "type": "tool_call",
+                        "tool_name": "ha_service_call",
+                        "arguments": {"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                        "confidence": 0.95,
+                    },
+                    headers={"X-API-Key": "integration-test-key"},
+                )
+                assert response.status_code == 200
+    finally:
+        main_module.config.broker_api_key = original_key
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_returns_429_on_second_request_when_limit_is_one():
+    """Rate limiter should block the second request in a tiny test window."""
+    from httpx import ASGITransport
+    from tool_broker import main as main_module
+
+    original_enabled = main_module.config.rate_limit_enabled
+    original_requests = main_module.config.rate_limit_requests
+    original_window = main_module.config.rate_limit_window_seconds
+
+    main_module.config.rate_limit_enabled = True
+    main_module.config.rate_limit_requests = 1
+    main_module.config.rate_limit_window_seconds = 60
+    main_module._rate_limit_state.clear()
+
+    try:
+        with patch("tool_broker.main.llm_client") as mock_llm, \
+             patch("tool_broker.main.ha_client") as mock_ha, \
+             patch("tool_broker.main.entity_validator") as mock_validator:
+            mock_llm.process = AsyncMock(return_value=ToolCall(
+                type=ToolCallType.TOOL_CALL,
+                tool_name="ha_service_call",
+                arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                confidence=0.95,
+            ))
+            mock_ha.call_service = AsyncMock(return_value=[])
+            mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                first = await ac.post("/v1/process", json={"text": "Turn on living room light"})
+                second = await ac.post("/v1/process", json={"text": "Turn on living room light"})
+
+                assert first.status_code == 200
+                assert second.status_code == 429
+                data = second.json()
+                assert data["error_code"] == "RATE_LIMITED"
+    finally:
+        main_module.config.rate_limit_enabled = original_enabled
+        main_module.config.rate_limit_requests = original_requests
+        main_module.config.rate_limit_window_seconds = original_window
+        main_module._rate_limit_state.clear()
+
+
+@pytest.mark.asyncio
+async def test_execute_high_risk_action_requires_confirmation_flag():
+    """High-risk execute should be rejected unless explicitly confirmed."""
+    from httpx import ASGITransport
+    from tool_broker import main as main_module
+
+    # Disable rate limiting to avoid test interference.
+    original_rate_enabled = main_module.config.rate_limit_enabled
+    main_module.config.rate_limit_enabled = False
+
+    try:
+        with patch("tool_broker.main.ha_client") as mock_ha, \
+             patch("tool_broker.main.entity_validator") as mock_validator:
+            mock_ha.call_service = AsyncMock(return_value=[])
+            mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                # Missing confirmed=true should fail for lock domain
+                denied = await ac.post(
+                    "/v1/execute",
+                    json={
+                        "type": "tool_call",
+                        "tool_name": "ha_service_call",
+                        "arguments": {"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"},
+                        "confidence": 0.95,
+                    },
+                )
+                assert denied.status_code == 403
+
+                # confirmed=true should allow execution
+                allowed = await ac.post(
+                    "/v1/execute",
+                    json={
+                        "type": "tool_call",
+                        "tool_name": "ha_service_call",
+                        "arguments": {
+                            "domain": "lock",
+                            "service": "unlock",
+                            "entity_id": "lock.front_door",
+                            "confirmed": True,
+                        },
+                        "confidence": 0.95,
+                    },
+                )
+                assert allowed.status_code == 200
+    finally:
+        main_module.config.rate_limit_enabled = original_rate_enabled
+
+
 # ============================================================================
 # Test Cases from Handoff
 # ============================================================================

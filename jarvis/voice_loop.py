@@ -29,7 +29,8 @@ class VoiceLoop:
         self,
         model_path: str = "./whisper.cpp/models/ggml-small.en.bin",
         chime_path: Optional[str] = None,
-        silence_timeout: float = 2.0
+        silence_timeout: float = 2.0,
+        max_utterance_seconds: float = 12.0,
     ):
         """Initialize voice loop.
         
@@ -53,10 +54,28 @@ class VoiceLoop:
             Path(__file__).parent.parent / "assets" / "chime.wav"
         )
         self.silence_timeout = silence_timeout
+        self.max_utterance_seconds = max_utterance_seconds
         
         # Session data
         self.user_input: str = ""
         self.response: str = ""
+        self._timings = {}
+
+    def _mark(self, stage: str):
+        """Mark stage timestamp for latency metrics."""
+        self._timings[stage] = time.monotonic()
+
+    def _print_latency_summary(self):
+        """Print key latency metrics for current interaction."""
+        if "wake_detected" in self._timings and "tts_start" in self._timings:
+            total = self._timings["tts_start"] - self._timings["wake_detected"]
+            print(f"⏱️  Wake→TTS start: {total:.2f}s")
+        if "stt_start" in self._timings and "stt_end" in self._timings:
+            stt = self._timings["stt_end"] - self._timings["stt_start"]
+            print(f"⏱️  STT capture: {stt:.2f}s")
+        if "llm_start" in self._timings and "llm_end" in self._timings:
+            llm = self._timings["llm_end"] - self._timings["llm_start"]
+            print(f"⏱️  LLM+broker: {llm:.2f}s")
         
     def start(self):
         """Start the voice loop."""
@@ -99,6 +118,8 @@ class VoiceLoop:
         
         if self.wake_word.wait_for_activation():
             print("✅ Wake word detected!")
+            self._timings = {}
+            self._mark("wake_detected")
             self._transition_to(VoiceState.ATTENDING)
             
     def _handle_attending(self):
@@ -108,14 +129,31 @@ class VoiceLoop:
         
         # Start STT
         print("🎤 Listening to user...")
-        self.stt.start_streaming()
-        
-        # Wait for silence (end of utterance)
-        # Simple approach: fixed duration recording
-        time.sleep(self.silence_timeout + 3.0)  # Give user time to speak
+        self._mark("stt_start")
+        self.stt.start_streaming(callback=self._on_stt_chunk)
+
+        # Wait until silence timeout after latest chunk, or max utterance duration
+        started = time.monotonic()
+        last_activity = started
+        saw_text = False
+
+        while True:
+            now = time.monotonic()
+            if self.stt.has_new_text():
+                last_activity = now
+                saw_text = True
+
+            if saw_text and (now - last_activity) >= self.silence_timeout:
+                break
+
+            if (now - started) >= self.max_utterance_seconds:
+                break
+
+            time.sleep(0.1)
         
         # Stop STT, get full transcript
         self.stt.stop()
+        self._mark("stt_end")
         self.user_input = self.stt.transcript.strip()
         
         if self.user_input:
@@ -128,20 +166,24 @@ class VoiceLoop:
     def _handle_processing(self):
         """Send query to Jarvis via Tool Broker."""
         print("🤔 Processing...")
+        self._mark("llm_start")
         
         try:
             # Call Tool Broker
             result = process_query(self.user_input)
             self.response = result.get("response", "I'm sorry, I couldn't process that.")
+            self._mark("llm_end")
             self._transition_to(VoiceState.SPEAKING)
         except Exception as e:
             print(f"❌ Processing error: {e}")
             self.response = "I apologize, I encountered an error."
+            self._mark("llm_end")
             self._transition_to(VoiceState.SPEAKING)
             
     def _handle_speaking(self):
         """Speak response with barge-in monitoring."""
         print(f"🗣️  Jarvis: {self.response}")
+        self._mark("tts_start")
         
         # Start barge-in detection
         self.barge_in.start_monitoring()
@@ -154,11 +196,19 @@ class VoiceLoop:
         
         if completed and not was_interrupted:
             print("✅ Response completed")
+            self._print_latency_summary()
             self._transition_to(VoiceState.LISTENING)
         else:
             # Barge-in occurred
             print("🔔 Response interrupted by barge-in")
+            self._print_latency_summary()
             self._transition_to(VoiceState.ATTENDING)
+
+    def _on_stt_chunk(self, chunk):
+        """Handle normalized STT chunk events."""
+        text = (chunk or {}).get("text", "").strip()
+        if text:
+            print(f"📝 STT chunk: {text}")
             
     def _transition_to(self, new_state: VoiceState):
         """Transition to new state with logging."""

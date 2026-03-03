@@ -7,7 +7,13 @@ for local development.
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
+
+
+def _parse_cors_origins() -> List[str]:
+    """Parse comma-separated CORS origins from environment."""
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 @dataclass
@@ -32,6 +38,11 @@ class Config:
     # Server settings
     host: str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: int(os.getenv("PORT", "8000")))
+    cors_allowed_origins: List[str] = field(default_factory=_parse_cors_origins)
+    broker_api_key: Optional[str] = field(default_factory=lambda: os.getenv("TOOL_BROKER_API_KEY"))
+    rate_limit_enabled: bool = field(default_factory=lambda: os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true")
+    rate_limit_requests: int = field(default_factory=lambda: int(os.getenv("RATE_LIMIT_REQUESTS", "60")))
+    rate_limit_window_seconds: int = field(default_factory=lambda: int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")))
 
 
 def _get_ha_token() -> Optional[str]:

@@ -16,10 +16,12 @@ API Endpoints:
 
 import logging
 import time
+import threading
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Union
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request
+from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
@@ -40,6 +42,7 @@ from .tools import REGISTERED_TOOLS, is_high_risk_action
 from .llm_client import LLMClient
 from .ha_client import HAClient, HAClientError
 from .validators import EntityValidator, ToolCallValidator
+from .policy_gate import PolicyGate
 
 # Configure logging
 logging.basicConfig(
@@ -52,6 +55,9 @@ logger = logging.getLogger(__name__)
 llm_client: LLMClient = None
 ha_client: HAClient = None
 entity_validator: EntityValidator = None
+_rate_limit_state: dict[tuple[str, str], list[float]] = {}
+_rate_limit_lock = threading.Lock()
+policy_gate = PolicyGate(allowed_tools=REGISTERED_TOOLS.keys())
 
 
 @asynccontextmanager
@@ -103,11 +109,63 @@ app = FastAPI(
 # CORS middleware for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _authorize_request(x_api_key: str | None) -> None:
+    """
+    Validate API key for protected endpoints.
+
+    If TOOL_BROKER_API_KEY is not configured, auth is disabled to preserve
+    local development behavior.
+    """
+    expected_key = config.broker_api_key
+    if not expected_key:
+        return
+    if x_api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _enforce_rate_limit(client_id: str, endpoint_path: str) -> bool:
+    """Return True when request is allowed under configured rate limits."""
+    if not config.rate_limit_enabled:
+        return True
+
+    now = time.monotonic()
+    window_start = now - max(config.rate_limit_window_seconds, 1)
+    key = (client_id, endpoint_path)
+
+    with _rate_limit_lock:
+        hits = _rate_limit_state.get(key, [])
+        hits = [timestamp for timestamp in hits if timestamp >= window_start]
+        if len(hits) >= max(config.rate_limit_requests, 1):
+            _rate_limit_state[key] = hits
+            return False
+        hits.append(now)
+        _rate_limit_state[key] = hits
+    return True
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Apply lightweight endpoint-level rate limiting for mutating broker routes."""
+    protected_paths = {"/v1/process", "/v1/execute"}
+    if request.url.path in protected_paths:
+        client_host = request.client.host if request.client else "unknown"
+        if not _enforce_rate_limit(client_host, request.url.path):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error_code": "RATE_LIMITED",
+                    "error_message": "Too many requests",
+                    "retryable": True,
+                },
+            )
+    return await call_next(request)
 
 
 # ============================================================================
@@ -159,7 +217,8 @@ async def list_tools():
 
 @app.post("/v1/process")
 async def process(
-    request: ProcessRequest
+    request: ProcessRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key")
 ) -> Union[ToolCall, ClarificationRequest, ConfirmationRequest, ErrorResponse]:
     """
     Process natural language input and return structured tool call.
@@ -176,6 +235,7 @@ async def process(
     Returns:
         ToolCall, ClarificationRequest, ConfirmationRequest, or ErrorResponse
     """
+    _authorize_request(x_api_key)
     logger.info(f"Processing: {request.text[:100]}...")
     start_time = time.time()
     
@@ -234,7 +294,10 @@ async def process(
 
 
 @app.post("/v1/execute", response_model=NormalizedResponse)
-async def execute(request: ExecuteRequest) -> NormalizedResponse:
+async def execute(
+    request: ExecuteRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key")
+) -> NormalizedResponse:
     """
     Execute a validated tool call.
     
@@ -247,6 +310,7 @@ async def execute(request: ExecuteRequest) -> NormalizedResponse:
     Returns:
         NormalizedResponse with execution result
     """
+    _authorize_request(x_api_key)
     logger.info(f"Executing: {request.tool_name}")
     start_time = time.time()
     
@@ -255,6 +319,11 @@ async def execute(request: ExecuteRequest) -> NormalizedResponse:
         is_valid, error_msg = await entity_validator.validate_tool_call(request.model_dump())
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
+
+        # Policy-gate enforcement (allowlist + risk/confirmation + time constraints)
+        decision = policy_gate.evaluate_execute(request.tool_name, request.arguments)
+        if not decision.allowed:
+            raise HTTPException(status_code=decision.status_code, detail=decision.reason)
         
         # Execute based on tool type
         if request.tool_name == "ha_service_call":

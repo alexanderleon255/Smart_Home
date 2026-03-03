@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
 """Synchronous wrapper for tool_broker API."""
 
+import os
 import requests
 from typing import Dict, Any
+
+
+TOOL_BROKER_URL = os.getenv("TOOL_BROKER_URL", "http://localhost:8000")
+TOOL_BROKER_API_KEY = os.getenv("TOOL_BROKER_API_KEY")
+
+
+def _auth_headers() -> Dict[str, str]:
+    """Build auth headers for Tool Broker requests."""
+    if TOOL_BROKER_API_KEY:
+        return {"X-API-Key": TOOL_BROKER_API_KEY}
+    return {}
 
 
 def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -20,8 +32,9 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
     try:
         # Call Tool Broker API
         response = requests.post(
-            "http://localhost:8000/v1/process",
+            f"{TOOL_BROKER_URL}/v1/process",
             json={"text": text, "context": context or {}},
+            headers=_auth_headers(),
             timeout=30
         )
         response.raise_for_status()
@@ -33,11 +46,14 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
             # If it's a tool call, execute it
             if result.get("type") == "tool_call":
                 execute_response = requests.post(
-                    "http://localhost:8000/v1/execute",
+                    f"{TOOL_BROKER_URL}/v1/execute",
                     json={
+                        "type": "tool_call",
                         "tool_name": result.get("tool_name"),
-                        "arguments": result.get("arguments", {})
+                        "arguments": result.get("arguments", {}),
+                        "confidence": float(result.get("confidence", 1.0)),
                     },
+                    headers=_auth_headers(),
                     timeout=30
                 )
                 execute_response.raise_for_status()
@@ -49,13 +65,13 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
                 }
             
             # If it's a clarification request
-            elif result.get("type") == "clarification":
+            elif result.get("type") == "clarification_request":
                 return {
                     "response": result.get("question", "Could you clarify that?")
                 }
             
             # If it's a confirmation request
-            elif result.get("type") == "confirmation":
+            elif result.get("type") == "confirmation_request":
                 return {
                     "response": f"Please confirm: {result.get('summary', 'Execute this action?')}"
                 }
