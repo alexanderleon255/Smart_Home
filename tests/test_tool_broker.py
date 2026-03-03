@@ -393,6 +393,34 @@ async def test_process_valid_request(client):
     assert "confidence" in data
 
 
+
+@pytest.mark.asyncio
+async def test_process_detects_high_risk_and_requests_confirmation():
+    """Process endpoint should detect high-risk actions and return ConfirmationRequest."""
+    from httpx import ASGITransport
+    from tool_broker import main as main_module
+
+    with patch("tool_broker.main.llm_client") as mock_llm, \
+         patch("tool_broker.main.entity_validator") as mock_validator:
+        # Mock LLM to return a high-risk unlock action
+        mock_llm.process = AsyncMock(return_value=ToolCall(
+            type=ToolCallType.TOOL_CALL,
+            tool_name="ha_service_call",
+            arguments={"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"},
+            confidence=0.95,
+        ))
+        mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/v1/process", json={"text": "Unlock the front door"})
+            assert response.status_code == 200
+            data = response.json()
+            # Should return ConfirmationRequest type for high-risk action
+            assert data["type"] == "confirmation_request"
+            assert data["action"] == "ha_service_call"
+            assert data["risk_level"] == "medium"
+
 @pytest.mark.asyncio
 async def test_api_key_auth_enforced_on_protected_endpoints():
     """Protected endpoints should require X-API-Key when configured."""
