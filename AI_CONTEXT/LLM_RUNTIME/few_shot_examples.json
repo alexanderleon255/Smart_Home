@@ -1,19 +1,23 @@
 {
-  "version": "1.0",
-  "description": "Few-shot examples for consistent LLM behavior",
+  "version": "2.0",
+  "description": "Few-shot examples for consistent LLM behavior. Synced to REGISTERED_TOOLS in tool_broker/tools.py on 2026-03-02.",
+  "note": "All tool_call objects MUST use the exact tool names and argument schemas from tool_definitions.json v2.0. The response wrapper uses type/tool_name/arguments/confidence.",
   
   "examples": [
     {
       "category": "device_control",
       "user": "Turn on the living room lights",
       "assistant": {
-        "thought": "User wants to turn on living room lights. Entity is light.living_room_ceiling.",
+        "thought": "User wants to turn on living room lights. I need ha_service_call with domain=light, service=turn_on.",
         "tool_call": {
-          "name": "control_device",
+          "type": "tool_call",
+          "tool_name": "ha_service_call",
           "arguments": {
-            "entity_id": "light.living_room_ceiling",
-            "action": "turn_on"
-          }
+            "domain": "light",
+            "service": "turn_on",
+            "entity_id": "light.living_room_ceiling"
+          },
+          "confidence": 0.95
         },
         "response": "Done. Living room lights are on."
       }
@@ -22,16 +26,19 @@
       "category": "device_control_with_params",
       "user": "Set the bedroom lights to 50%",
       "assistant": {
-        "thought": "User wants bedroom lights dimmed to 50%. Entity is light.bedroom_ceiling.",
+        "thought": "User wants bedroom lights dimmed to 50%. I'll use ha_service_call with brightness in the data field.",
         "tool_call": {
-          "name": "control_device",
+          "type": "tool_call",
+          "tool_name": "ha_service_call",
           "arguments": {
+            "domain": "light",
+            "service": "turn_on",
             "entity_id": "light.bedroom_ceiling",
-            "action": "turn_on",
-            "attributes": {
+            "data": {
               "brightness_pct": 50
             }
-          }
+          },
+          "confidence": 0.93
         },
         "response": "Bedroom lights set to 50%."
       }
@@ -40,60 +47,75 @@
       "category": "entity_not_found",
       "user": "Turn on the garage lights",
       "assistant": {
-        "thought": "User wants garage lights, but I don't see 'garage' in my entity registry.",
-        "tool_call": null,
+        "thought": "User wants garage lights, but I don't see 'garage' in my entity registry. I should clarify instead of guessing.",
+        "tool_call": {
+          "type": "clarification_request",
+          "question": "I don't see a light called 'garage' in my devices. I have: living room ceiling, bedroom ceiling. Did you mean one of those, or is the garage light not connected yet?"
+        },
         "response": "I don't see a light called 'garage' in my devices. I have: living room ceiling, bedroom ceiling. Did you mean one of those, or is the garage light not connected yet?"
       }
     },
     {
-      "category": "weather_query",
-      "user": "What's the weather?",
+      "category": "get_entity_state",
+      "user": "What's the temperature in the house?",
       "assistant": {
-        "thought": "User wants current weather.",
+        "thought": "User wants to know the temperature. I'll use ha_get_state on the temperature sensor.",
         "tool_call": {
-          "name": "get_weather",
+          "type": "tool_call",
+          "tool_name": "ha_get_state",
           "arguments": {
-            "type": "current"
-          }
+            "entity_id": "sensor.temperature"
+          },
+          "confidence": 0.92
         },
-        "response": "It's 52°F and partly cloudy. High of 65° today with a 20% chance of afternoon showers. Need an umbrella? Probably not, but maybe keep one handy."
+        "response": "The house is currently at 72°F."
       }
     },
     {
-      "category": "traffic_query",
-      "user": "How's traffic to work?",
+      "category": "list_entities",
+      "user": "What lights do I have?",
       "assistant": {
-        "thought": "User asking about commute. Need to use their configured work address.",
+        "thought": "User wants to know available lights. I'll use ha_list_entities filtered by the light domain.",
         "tool_call": {
-          "name": "get_traffic",
+          "type": "tool_call",
+          "tool_name": "ha_list_entities",
           "arguments": {
-            "destination": "work_alex"
-          }
+            "domain": "light"
+          },
+          "confidence": 0.90
         },
-        "response": "Your commute looks good - about 25 minutes via I-5. No incidents reported. You'd want to leave by 8:35 to arrive by 9."
+        "response": "You have these lights: living room ceiling, bedroom ceiling, bedroom bedside left, bedroom bedside right, kitchen under-cabinet."
       }
     },
     {
-      "category": "lock_unlock_confirmation",
+      "category": "lock_confirmation_required",
       "user": "Unlock the front door",
       "assistant": {
-        "thought": "Security-sensitive action - must confirm before unlocking.",
-        "tool_call": null,
+        "thought": "Lock actions are high-risk (lock domain). I must request confirmation before executing.",
+        "tool_call": {
+          "type": "confirmation_request",
+          "action": "ha_service_call:lock.unlock:lock.front_door",
+          "summary": "Unlock the front door",
+          "risk_level": "high"
+        },
         "response": "Are you sure you want to unlock the front door? Say 'yes' to confirm."
       }
     },
     {
-      "category": "lock_unlock_confirmed",
-      "context": "User previously asked to unlock front door",
+      "category": "lock_confirmed",
+      "context": "User previously asked to unlock front door and confirmed",
       "user": "Yes",
       "assistant": {
-        "thought": "User confirmed unlock request.",
+        "thought": "User confirmed the unlock. Now I can execute the ha_service_call for the lock.",
         "tool_call": {
-          "name": "control_lock",
+          "type": "tool_call",
+          "tool_name": "ha_service_call",
           "arguments": {
-            "entity_id": "lock.front_door",
-            "action": "unlock"
-          }
+            "domain": "lock",
+            "service": "unlock",
+            "entity_id": "lock.front_door"
+          },
+          "confidence": 0.98
         },
         "response": "Front door unlocked. Don't forget to lock it when you're done!"
       }
@@ -102,68 +124,85 @@
       "category": "web_search",
       "user": "Find me a good Thai restaurant nearby",
       "assistant": {
-        "thought": "User wants local restaurant recommendations. Will search and summarize.",
+        "thought": "User wants local restaurant recommendations. I'll use web_search.",
         "tool_call": {
-          "name": "search_web",
+          "type": "tool_call",
+          "tool_name": "web_search",
           "arguments": {
-            "query": "best Thai restaurant near [location]",
-            "search_type": "local",
-            "num_results": 5
-          }
+            "query": "best Thai restaurant near me"
+          },
+          "confidence": 0.87
         },
-        "response": "I found a few options:\n• Thai Ginger (4.5★, 1.2 mi) - Known for great pad thai\n• Bahn Thai (4.3★, 1.8 mi) - Authentic northern Thai\n• Siam Palace (4.4★, 0.9 mi) - Good lunch specials\n\nWant more details on any of these?"
+        "response": "I found a few options:\n- Thai Ginger (4.5 stars, 1.2 mi) - Known for great pad thai\n- Bahn Thai (4.3 stars, 1.8 mi) - Authentic northern Thai\n- Siam Palace (4.4 stars, 0.9 mi) - Good lunch specials\n\nWant more details on any of these?"
       }
     },
     {
-      "category": "preference_learning",
-      "user": "Actually, I like the lights at 40% for movies, not 30%",
+      "category": "create_reminder",
+      "user": "Remind me to replace the air filter next Saturday",
       "assistant": {
-        "thought": "User is correcting a preference. Should save this.",
+        "thought": "User wants a reminder. I'll use create_reminder with a due date.",
         "tool_call": {
-          "name": "create_memory",
+          "type": "tool_call",
+          "tool_name": "create_reminder",
           "arguments": {
-            "type": "preference",
-            "content": "Alex prefers lights at 40% for movie watching, not 30%",
-            "user": "alex",
-            "keywords": ["movie", "lights", "brightness", "40%"]
-          }
+            "title": "Replace air filter",
+            "due": "2026-03-07T09:00:00",
+            "priority": "normal"
+          },
+          "confidence": 0.90
         },
-        "response": "Got it! I'll remember 40% for movie time from now on."
-      }
-    },
-    {
-      "category": "morning_briefing",
-      "user": "Good morning",
-      "assistant": {
-        "thought": "Morning greeting triggers briefing routine.",
-        "tool_call": [
-          {"name": "get_weather", "arguments": {"type": "current"}},
-          {"name": "get_traffic", "arguments": {"destination": "work_alex"}}
-        ],
-        "response": "Good morning! It's 48°F heading up to 62° today - looks like a nice one. Your commute shows 23 minutes, no delays. You've got a 10 AM team standup. Anything else before you head out?"
+        "response": "Reminder set: Replace air filter on Saturday, March 7th at 9 AM."
       }
     },
     {
       "category": "ambiguous_device",
       "user": "Turn off the lamp",
       "assistant": {
-        "thought": "User said 'lamp' but I have multiple lamps. Need to clarify.",
-        "tool_call": null,
+        "thought": "User said 'lamp' but I have multiple lamps. I need to clarify which one.",
+        "tool_call": {
+          "type": "clarification_request",
+          "question": "Which lamp? I have the living room lamp and the bedroom bedside lamps."
+        },
         "response": "Which lamp? I have the living room lamp and the bedroom bedside lamps."
+      }
+    },
+    {
+      "category": "climate_control",
+      "user": "Set the thermostat to 72",
+      "assistant": {
+        "thought": "User wants to set temperature. Climate control uses ha_service_call with climate domain.",
+        "tool_call": {
+          "type": "tool_call",
+          "tool_name": "ha_service_call",
+          "arguments": {
+            "domain": "climate",
+            "service": "set_temperature",
+            "entity_id": "climate.main_thermostat",
+            "data": {
+              "temperature": 72
+            }
+          },
+          "confidence": 0.94
+        },
+        "response": "Thermostat set to 72°F."
       }
     },
     {
       "category": "scene_activation",
       "user": "Movie time",
       "assistant": {
-        "thought": "User wants movie scene. Using their preference of 40% lights.",
+        "thought": "User wants movie scene. I'll activate the HA scene via ha_service_call.",
         "tool_call": {
-          "name": "run_scene",
+          "type": "tool_call",
+          "tool_name": "ha_service_call",
           "arguments": {
-            "scene_id": "movie"
-          }
+            "domain": "scene",
+            "service": "turn_on",
+            "entity_id": "scene.movie"
+          },
+          "confidence": 0.91
         },
-        "response": "Movie mode activated. Living room lights at 40%, other lights off. Enjoy!"
+        "response": "Movie mode activated. Living room lights dimmed, other lights off. Enjoy!"
       }
     }
   ]

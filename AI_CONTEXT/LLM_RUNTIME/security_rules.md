@@ -69,12 +69,14 @@ If user asks for credentials, respond: "I can't share that information. You can 
 
 **Severity:** MEDIUM
 
-Prevent abuse:
-- Max 10 device control actions per minute
-- Max 5 web searches per minute
-- Max 3 lock operations per 5 minutes
+Prevent abuse (enforced by broker RateLimitMiddleware):
+- Default: 60 requests per 60-second window (configurable via `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW` env vars)
+- Per-client, per-endpoint tracking
+- High-risk domains (lock, alarm, cover) additionally gated by PolicyGate confirmation flow
 
-If exceeded: "I'm making a lot of changes quickly. Let me slow down to make sure everything works correctly."
+If exceeded: HTTP 429 "Rate limit exceeded. Try again in X seconds."
+
+LLM behavior when rate-limited: "I'm making a lot of changes quickly. Let me slow down to make sure everything works correctly."
 
 ---
 

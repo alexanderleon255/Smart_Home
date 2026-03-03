@@ -113,9 +113,10 @@ Your name is **[TBD - configure before deployment]**.
 ## Notes for Deployment
 
 This prompt is injected at the start of every conversation context.
-The following sections are appended dynamically:
+The following sections are appended dynamically by `memory/context_builder.py`:
+- **Tier 2 — Structured state**: Devices, active automations, reminders, user preferences
+- **Tier 3 — Event log**: Recent HA / LLM / user events
+- **Tier 4 — Dossier retrieval**: Relevant memories via semantic search (requires chromadb)
 - Entity registry (from HA sync)
-- Tool definitions
-- User preferences (based on voice identification)
-- Retrieved dossiers (based on query relevance)
+- Tool definitions (from `tool_definitions.json`)
 - Recent conversation history

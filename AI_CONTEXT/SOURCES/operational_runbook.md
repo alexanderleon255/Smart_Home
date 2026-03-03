@@ -75,15 +75,15 @@ launchctl load ~/Library/LaunchAgents/com.ollama.serve.plist
     <string>com.smarthome.toolbroker</string>
     <key>ProgramArguments</key>
     <array>
-        <string>[TBD - path to python]</string>
-        <string>[TBD - path to tool_broker/main.py]</string>
+        <string>/Users/alexleon/Developer/BoltPatternSuiteV.1/.venv/bin/python</string>
+        <string>/Users/alexleon/Developer/BoltPatternSuiteV.1/Smart_Home/tool_broker/main.py</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>WorkingDirectory</key>
-    <string>[TBD - path to tool_broker]</string>
+    <string>/Users/alexleon/Developer/BoltPatternSuiteV.1/Smart_Home/tool_broker</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>HA_TOKEN</key>

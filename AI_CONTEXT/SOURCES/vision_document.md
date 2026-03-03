@@ -889,13 +889,13 @@ A **session** is defined as:
 | Phase | Focus | Duration | Status |
 |-------|-------|----------|--------|
 | **Phase 1** | Hub Setup | 1-2 weeks | NOT STARTED |
-| **Phase 2** | AI Sidecar | 1-2 weeks | **PARTIAL** |
+| **Phase 2** | AI Sidecar | 1-2 weeks | **86% COMPLETE** |
 | **Phase 3** | Voice Pipeline (Pi-based) | 1-2 weeks | NOT STARTED |
-| **Phase 4** | Security Hardening | 1 week | NOT STARTED |
+| **Phase 4** | Security Hardening | 1 week | **17% (software done)** |
 | **Phase 5** | Camera Integration | 1-2 weeks | NOT STARTED |
-| **Phase 6** | Jarvis Real-Time Voice (Mac) | 1-2 weeks | NOT STARTED |
-| **Phase 7** | Autonomous Secretary | 2-3 weeks | NOT STARTED |
-| **Phase 8** | Advanced AI Features | Ongoing | NOT STARTED |
+| **Phase 6** | Jarvis Real-Time Voice (Mac) | 1-2 weeks | **50% COMPLETE** |
+| **Phase 7** | Autonomous Secretary | 2-3 weeks | **100% COMPLETE** |
+| **Phase 8** | Advanced AI Features | Ongoing | **100% COMPLETE** |
 
 See `ROADMAPS/2026-03-02_smart_home_master_roadmap.md` for detailed milestones.
 

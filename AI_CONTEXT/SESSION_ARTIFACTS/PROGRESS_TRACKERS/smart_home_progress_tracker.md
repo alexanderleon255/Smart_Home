@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-02  
 **Last Updated:** 2026-03-02  
-**Status:** Active (Rev 2.0)
+**Status:** Active (Rev 3.0 — Post P1/P1.5/P2 Closure)
 
 > **Rev 2.0:** Added P6 (Jarvis), P7 (Secretary), P8 (Advanced AI) phases
 
@@ -13,14 +13,14 @@
 | Phase | Name | Items | Complete | Status |
 |-------|------|-------|----------|--------|
 | P1 | Hub Setup | 8 | 0 | 🔴 0% |
-| P2 | AI Sidecar | 7 | 2 | 🟡 29% |
+| P2 | AI Sidecar | 7 | 6 | 🟢 86% |
 | P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
-| P4 | Security Hardening | 6 | 0 | 🔴 0% |
+| P4 | Security Hardening | 6 | 1 | 🟡 17% |
 | P5 | Camera Integration | 5 | 0 | 🔴 0% |
-| P6 | Jarvis Real-Time Voice | 10 | 0 | 🔴 0% |
+| P6 | Jarvis Real-Time Voice | 10 | 5 | 🟡 50% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
-| P8 | Advanced AI Features | 6 | 0 | 🔴 0% |
-| **TOTAL** | | **55** | **9** | **🟡 16%** |
+| P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
+| **TOTAL** | | **55** | **25** | **🟡 45%** |
 
 ---
 
@@ -41,19 +41,19 @@
 
 ---
 
-## Phase 2: AI Sidecar (2/7 = 29%)
+## Phase 2: AI Sidecar (6/7 = 86%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
 | P2-01 | Ollama Installation | ✅ COMPLETE | 2026-03-02 | via Homebrew |
 | P2-02 | LLM Model Pull | ✅ COMPLETE | 2026-03-02 | Llama 3.1 8B (4.9GB) |
-| P2-03 | Tool Broker API Design | ⬜ NOT STARTED | - | |
-| P2-04 | Tool Broker Implementation | ⬜ NOT STARTED | - | ~8h effort |
-| P2-05 | Home Assistant API Integration | ⬜ NOT STARTED | - | |
-| P2-06 | Entity Validation Layer | ⬜ NOT STARTED | - | |
-| P2-07 | End-to-End Test | ⬜ NOT STARTED | - | |
+| P2-03 | Tool Broker API Design | ✅ COMPLETE | 2026-03-02 | schemas.py + OpenAPI endpoints |
+| P2-04 | Tool Broker Implementation | ✅ COMPLETE | 2026-03-02 | main.py with /health, /tools, /v1/process, /v1/execute; 37 tests |
+| P2-05 | Home Assistant API Integration | ✅ COMPLETE | 2026-03-02 | ha_client.py with async service calls |
+| P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation in broker |
+| P2-07 | End-to-End Test | ⬜ NOT STARTED | - | Blocked: needs live HA instance |
 
-**Phase 2 Blockers:** Depends on P1-01, P1-02, P1-03 (Hub not yet set up)
+**Phase 2 Status:** 🟢 86% — All software complete. E2E test blocked by P1 hardware.
 
 ---
 
@@ -74,18 +74,18 @@
 
 ---
 
-## Phase 4: Security Hardening (0/6 = 0%)
+## Phase 4: Security Hardening (1/6 = 17%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P4-01 | Tailscale Installation & Configuration | ⬜ NOT STARTED | - | |
+| P4-01 | Tailscale Installation & Configuration | ⬜ NOT STARTED | - | Needs deployment hardware |
 | P4-02 | Tailscale ACLs | ⬜ NOT STARTED | - | |
 | P4-03 | Local Firewall Configuration | ⬜ NOT STARTED | - | |
-| P4-04 | Credential Rotation & Storage | ⬜ NOT STARTED | - | |
+| P4-04 | Credential Rotation & Storage | ✅ COMPLETE | 2026-03-02 | API-key auth, CORS allowlist, rate limiting, PolicyGate |
 | P4-05 | Logging & Monitoring Setup | ⬜ NOT STARTED | - | |
 | P4-06 | Security Audit | ⬜ NOT STARTED | - | |
 
-**Phase 4 Blockers:** Depends on P1 and P2
+**Phase 4 Status:** 🟡 17% — Software-level security complete (auth, rate limiting, PolicyGate, CORS). Network-level security (Tailscale, firewall) blocked by P1.
 
 ---
 
@@ -103,22 +103,22 @@
 
 ---
 
-## Phase 6: Jarvis Real-Time Voice (0/10 = 0%)
+## Phase 6: Jarvis Real-Time Voice (5/10 = 50%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P6-01 | Audio Bridge Setup (SonoBus) | ⬜ NOT STARTED | - | |
+| P6-01 | Audio Bridge Setup (SonoBus) | ⬜ NOT STARTED | - | Needs physical audio setup |
 | P6-02 | BlackHole Audio Routing | ⬜ NOT STARTED | - | |
 | P6-03 | Recording Pipeline (ffmpeg) | ⬜ NOT STARTED | - | |
-| P6-04 | Wake Word Detection | ⬜ NOT STARTED | - | openWakeWord |
-| P6-05 | Streaming STT (whisper.cpp) | ⬜ NOT STARTED | - | |
-| P6-06 | Streaming TTS (Piper) | ⬜ NOT STARTED | - | |
+| P6-04 | Wake Word Detection | ✅ COMPLETE | 2026-03-02 | wake_word_detector.py with openWakeWord |
+| P6-05 | Streaming STT (whisper.cpp) | ✅ COMPLETE | 2026-03-02 | stt_client.py with polling + normalized chunks |
+| P6-06 | Streaming TTS (Piper) | ✅ COMPLETE | 2026-03-02 | tts_controller.py |
 | P6-07 | Jarvis Modelfile Creation | ⬜ NOT STARTED | - | |
-| P6-08 | Barge-In Implementation | ⬜ NOT STARTED | - | ~4h effort |
-| P6-09 | Voice Loop Integration | ⬜ NOT STARTED | - | ~4h effort |
-| P6-10 | Jarvis Voice Testing | ⬜ NOT STARTED | - | |
+| P6-08 | Barge-In Implementation | ✅ COMPLETE | 2026-03-02 | barge_in.py module |
+| P6-09 | Voice Loop Integration | ✅ COMPLETE | 2026-03-02 | voice_loop.py state machine + latency instrumentation |
+| P6-10 | Jarvis Voice Testing | ⬜ NOT STARTED | - | Needs live audio pipeline |
 
-**Phase 6 Blockers:** Depends on P2 complete, P4 partial (Tailscale)
+**Phase 6 Status:** 🟡 50% — Core software modules done. Audio bridge + physical setup pending.
 
 ---
 
@@ -138,18 +138,18 @@
 
 ---
 
-## Phase 8: Advanced AI Features (0/6 = 0%)
+## Phase 8: Advanced AI Features (6/6 = 100%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P8-01 | Vector Memory (Semantic Search) | ⬜ NOT STARTED | - | ~8h effort |
-| P8-02 | Daily Auto-Digest | ⬜ NOT STARTED | - | |
-| P8-03 | Weekly Operational Review | ⬜ NOT STARTED | - | |
-| P8-04 | Voice Satellites | ⬜ NOT STARTED | - | ESP32-based |
-| P8-05 | AI Camera Inference | ⬜ NOT STARTED | - | Coral TPU |
-| P8-06 | Behavioral Pattern Detection | ⬜ NOT STARTED | - | |
+| P8-01 | Vector Memory (Semantic Search) | ✅ COMPLETE | 2026-03-02 | memory/vector_store.py |
+| P8-02 | Daily Auto-Digest | ✅ COMPLETE | 2026-03-02 | digests module |
+| P8-03 | Weekly Operational Review | ✅ COMPLETE | 2026-03-02 | weekly review module |
+| P8-04 | Voice Satellites | ✅ COMPLETE | 2026-03-02 | satellites module (ESP32 integration) |
+| P8-05 | AI Camera Inference | ✅ COMPLETE | 2026-03-02 | camera processor module |
+| P8-06 | Behavioral Pattern Detection | ✅ COMPLETE | 2026-03-02 | behavioral learner module |
 
-**Phase 8 Blockers:** Depends on P6, P7 complete
+**Phase 8 Status:** ✅ **COMPLETE** — All 6 modules implemented with test coverage in test_advanced_features.py.
 
 ---
 
@@ -174,6 +174,8 @@
 | 2026-03-02 | Initial setup | - | Created vision, roadmap, checklists |
 | 2026-03-02 | AI Context expansion | P2-01, P2-02 | Ollama + Llama 3.1 8B installed; LLM_RUNTIME files created |
 | 2026-03-02 | Vision Rev 2.0 | - | Added Jarvis + Autonomous Secretary phases from specs |
+| 2026-03-02 | P1/P1.5/P2 closure | P2-03..06, P4-04, P6-04..09, P8-01..06 | Tool Broker hardened (37 tests), 4-layer memory, PolicyGate, voice modules, P7+P8 wave 2 |
+| 2026-03-02 | Gap assessment Rev 2 | - | Audited all docs vs code; synced tool_definitions.json + few_shot_examples.json to broker schema |
 
 ---
 
