@@ -1,6 +1,6 @@
 # Smart Home Project – AI Agent Instructions
 
-> **Context Root:** `Smart_Home/AI_CONTEXT/`
+> **Context Root:** `AI_CONTEXT/`
 > 
 > **This file is the entry point for AI agents working on the Smart Home project.**
 
@@ -56,7 +56,7 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 
 1. **Load Progress Tracker**
    ```bash
-   cat Smart_Home/AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md
+   cat AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md
    ```
 
 2. **Load Relevant Context**
@@ -82,7 +82,7 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 
 3. **Commit Changes**
    ```bash
-   git add Smart_Home/
+   git add .
    git commit -m "[Smart Home] P1-XX: Description"
    git push
    ```
@@ -161,7 +161,7 @@ When implementing any AI/LLM-related features:
 ## 7. File Locations
 
 ```
-Smart_Home/
+./  (repo root)
 ├── AI_CONTEXT/
 │   ├── SESSION_ARTIFACTS/
 │   │   ├── HANDOFFS/           # Session handoffs
@@ -190,7 +190,7 @@ This project supports parallel agent execution:
 | Background Agent | Implementation | background/smart-home-p*-* |
 | Local Agent | Quick fixes, debugging | local/smart-home-* |
 
-**Handoff Template:** Use BoltPatternSuite's template structure:
+**Handoff Template:**
 ```
 SESSION_ARTIFACTS/HANDOFFS/YYYY-MM-DD_<topic>_handoff.md
 ```
@@ -201,17 +201,17 @@ SESSION_ARTIFACTS/HANDOFFS/YYYY-MM-DD_<topic>_handoff.md
 
 ```bash
 # Check project status
-cat Smart_Home/AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md
+cat AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md
 
 # View roadmap
-cat Smart_Home/AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-02_smart_home_master_roadmap.md
+cat AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-02_smart_home_master_roadmap.md
 
 # View vision
-cat Smart_Home/AI_CONTEXT/SOURCES/vision_document.md
+cat AI_CONTEXT/SOURCES/vision_document.md
 
 # View phase checklist
-cat Smart_Home/AI_CONTEXT/SESSION_ARTIFACTS/CHECKLISTS/phase1_hub_setup_checklist.md
-cat Smart_Home/AI_CONTEXT/SESSION_ARTIFACTS/CHECKLISTS/phase2_ai_sidecar_checklist.md
+cat AI_CONTEXT/SESSION_ARTIFACTS/CHECKLISTS/phase1_hub_setup_checklist.md
+cat AI_CONTEXT/SESSION_ARTIFACTS/CHECKLISTS/phase2_ai_sidecar_checklist.md
 ```
 
 ---
