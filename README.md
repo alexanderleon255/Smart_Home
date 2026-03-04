@@ -1,5 +1,7 @@
 # Smart Home - Tool Broker
 
+> **Note:** This is a standalone repository extracted from [BoltPatternSuiteV.1](https://github.com/alexanderleon255/BoltPatternSuiteV.1) in March 2026. For other projects, see [BoltPatternSuite](https://github.com/alexanderleon255/BoltPatternSuiteV.1) (mechanical engineering) and [arduino-pneumatic-poc](https://github.com/alexanderleon255/arduino-pneumatic-poc) (hardware).
+
 The Tool Broker is a FastAPI service that bridges natural language requests to Home Assistant actions via Ollama LLM.
 
 ## Architecture
