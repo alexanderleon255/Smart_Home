@@ -19,7 +19,12 @@ coverage.xml
 Thumbs.db
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
+
+# Home Assistant runtime data
+ha_config/
+docker/homeassistant/

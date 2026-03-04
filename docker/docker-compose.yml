@@ -1,0 +1,37 @@
+# Smart Home — Docker Compose
+# Deploys Home Assistant Container + Mosquitto MQTT broker
+# Per RPi5_Max_Capability_Local_Build.md
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      - TZ=America/New_York
+    volumes:
+      - ../ha_config:/config
+      # Pass through USB devices (Zigbee/Z-Wave dongles)
+      - /run/dbus:/run/dbus:ro
+    # Uncomment below when you have a Zigbee/Z-Wave USB dongle:
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0   # Zigbee dongle
+    #   - /dev/ttyACM0:/dev/ttyACM0   # Z-Wave dongle
+
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+      - ./mosquitto/config:/mosquitto/config
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:

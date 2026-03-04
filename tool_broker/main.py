@@ -19,10 +19,16 @@ import time
 import threading
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Union
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Request
 from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load .env file from project root
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_path)
 
 from .config import config
 from .schemas import (

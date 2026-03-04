@@ -88,7 +88,8 @@ class TestContextBuilderInit:
         )
         assert cb.state_store is not None
         assert cb.event_store is not None
-        assert cb.vector_store is None  # chromadb not installed
+        # chromadb is installed, so vector_store should be available
+        assert cb.vector_store is not None
 
     def test_injected_stores(self, state_store, event_store):
         cb = ContextBuilder(state_store=state_store, event_store=event_store)

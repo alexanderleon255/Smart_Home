@@ -7,7 +7,6 @@ Part of the 4-tier memory architecture (Tier 4: Vector Memory).
 """
 
 import chromadb
-from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from datetime import datetime
 from pathlib import Path
@@ -32,12 +31,10 @@ class VectorMemory:
         self.persist_dir = Path(persist_dir).expanduser()
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize ChromaDB with persistence
-        self.client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=str(self.persist_dir),
-            anonymized_telemetry=False
-        ))
+        # Initialize ChromaDB with persistence (new API – PersistentClient)
+        self.client = chromadb.PersistentClient(
+            path=str(self.persist_dir),
+        )
         
         # Collections
         self.conversations = self.client.get_or_create_collection(
