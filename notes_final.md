@@ -1,0 +1,1 @@
+{"summary": "We discussed lights", "key_points": ["LED preferred"], "action_items": []}
