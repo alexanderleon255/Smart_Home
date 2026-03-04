@@ -14,6 +14,7 @@ Launch:  python -m dashboard.app          (from Smart_Home/)
 """
 
 import json
+import os
 import time
 from collections import deque
 from datetime import datetime
@@ -21,6 +22,7 @@ from datetime import datetime
 import dash
 from dash import html, dcc, Input, Output, State, callback_context, no_update
 import httpx
+from dotenv import load_dotenv
 
 from .process_manager import ProcessManager, ServiceStatus
 
@@ -34,10 +36,12 @@ except ImportError:
 # Configuration
 # ---------------------------------------------------------------------------
 
-BROKER_URL = "http://localhost:8000"
-OLLAMA_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1:8b"
-DASHBOARD_PORT = 8050
+load_dotenv()
+
+BROKER_URL = os.getenv("TOOL_BROKER_URL", os.getenv("BROKER_URL", "http://localhost:8000"))
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8050"))
 
 # ---------------------------------------------------------------------------
 # Shared state
