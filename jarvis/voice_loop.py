@@ -12,6 +12,7 @@ from .stt_client import WhisperSTT
 from .tts_controller import InterruptibleTTS
 from .barge_in import BargeInDetector
 from .tool_broker_client import process_query
+from .service import VoiceServiceManager
 
 
 class VoiceState(enum.Enum):
@@ -61,6 +62,9 @@ class VoiceLoop:
         self.response: str = ""
         self._timings = {}
 
+        # Service manager for health reporting
+        self._service = VoiceServiceManager()
+
     def _mark(self, stage: str):
         """Mark stage timestamp for latency metrics."""
         self._timings[stage] = time.monotonic()
@@ -84,9 +88,11 @@ class VoiceLoop:
         print(f"   Chime: {self.chime_path}")
         print()
         self.running = True
+        self._service.mark_started()
         
         while self.running:
             try:
+                self._service.write_status(self.state.value)
                 self._run_iteration()
             except KeyboardInterrupt:
                 print("\n👋 Shutting down...")
@@ -95,7 +101,10 @@ class VoiceLoop:
                 print(f"❌ Error in voice loop: {e}")
                 import traceback
                 traceback.print_exc()
+                self._service.record_error()
                 time.sleep(1)  # Prevent tight error loop
+
+        self._service.clear_status()
                 
     def _run_iteration(self):
         """Single iteration of the state machine."""
@@ -173,11 +182,13 @@ class VoiceLoop:
             result = process_query(self.user_input)
             self.response = result.get("response", "I'm sorry, I couldn't process that.")
             self._mark("llm_end")
+            self._service.record_interaction()
             self._transition_to(VoiceState.SPEAKING)
         except Exception as e:
             print(f"❌ Processing error: {e}")
             self.response = "I apologize, I encountered an error."
             self._mark("llm_end")
+            self._service.record_error()
             self._transition_to(VoiceState.SPEAKING)
             
     def _handle_speaking(self):

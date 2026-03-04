@@ -3,6 +3,10 @@ Pydantic schemas for Tool Broker API.
 
 These schemas follow the Explicit Interface Contracts v1.0 specification
 for LLM ↔ Broker ↔ HA communication.
+
+Architecture: Conversation-first with optional tool calls (DEC-008).
+Every LLM response has a `text` field (conversational) and a `tool_calls`
+array (empty when no action needed).
 """
 
 from enum import Enum
@@ -40,13 +44,37 @@ class ExecuteRequest(BaseModel):
 
 
 # ============================================================================
-# Response Schemas (Interface Contracts v1.0)
+# Response Schemas (Interface Contracts v1.0 + DEC-008)
 # ============================================================================
+
+class EmbeddedToolCall(BaseModel):
+    """A single tool call embedded in a conversational response."""
+    tool_name: str = Field(..., description="Name of the tool to call")
+    arguments: Dict[str, Any] = Field(default_factory=dict, description="Tool arguments")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Confidence score 0.0-1.0")
+    requires_confirmation: bool = Field(default=False, description="Whether this action needs user confirmation")
+
+
+class ConversationalResponse(BaseModel):
+    """
+    Conversation-first LLM response (DEC-008).
+    
+    Every response has natural language `text` and an optional list of `tool_calls`.
+    This is the PRIMARY response type for the /v1/process endpoint.
+    """
+    text: str = Field(..., description="Natural language response text (always present)")
+    tool_calls: List[EmbeddedToolCall] = Field(
+        default_factory=list,
+        description="Optional tool calls to execute (empty for pure conversation)"
+    )
+
+
+# --- Legacy types kept for backward compatibility with /v1/execute ---
 
 class ToolCall(BaseModel):
     """
-    Tool call response from LLM.
-    Schema matching Explicit_Interface_Contracts_v1.0.md
+    Tool call response from LLM (legacy format).
+    Used internally and by /v1/execute endpoint.
     """
     type: ToolCallType = ToolCallType.TOOL_CALL
     tool_name: str = Field(..., description="Name of the tool to call")
@@ -82,6 +110,27 @@ class NormalizedResponse(BaseModel):
     ha_response: Dict[str, Any] = Field(default_factory=dict, description="Raw HA response")
 
 
+class ProcessResponse(BaseModel):
+    """
+    Full response from POST /v1/process.
+    
+    Wraps ConversationalResponse with execution results from any tool calls.
+    """
+    text: str = Field(..., description="LLM conversational text")
+    tool_calls: List[EmbeddedToolCall] = Field(
+        default_factory=list,
+        description="Tool calls that were requested"
+    )
+    tool_results: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Results from executed tool calls (populated when auto-execute is enabled)"
+    )
+    requires_confirmation: bool = Field(
+        default=False,
+        description="True if any tool call requires user confirmation before execution"
+    )
+
+
 class ErrorResponse(BaseModel):
     """
     Error format per Interface Contracts §5.
@@ -114,5 +163,5 @@ class ToolsResponse(BaseModel):
     tools: List[ToolDefinition]
 
 
-# Union type for all LLM responses
+# Union type for all LLM responses (legacy — kept for backward compat)
 LLMResponse = Union[ToolCall, ClarificationRequest, ConfirmationRequest]

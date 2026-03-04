@@ -20,14 +20,16 @@ def _auth_headers() -> Dict[str, str]:
 def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Process a natural language query through the Tool Broker.
     
-    This is a synchronous wrapper around the Tool Broker's /v1/process endpoint.
+    Conversation-first architecture (DEC-008): The broker always returns
+    conversational text and optionally includes tool calls.
     
     Args:
         text: Natural language query
         context: Optional context dict
         
     Returns:
-        Dict with 'response' key containing the LLM response text
+        Dict with 'response' key containing LLM conversational text,
+        plus optional 'tool_results' and 'requires_confirmation'.
     """
     try:
         # Call Tool Broker API
@@ -41,53 +43,71 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         
         result = response.json()
         
-        # Handle different response types
-        if isinstance(result, dict):
-            # If it's a tool call, execute it
-            if result.get("type") == "tool_call":
+        if not isinstance(result, dict):
+            return {"response": "I processed your request"}
+        
+        # ---- Error response ----
+        if result.get("error_code"):
+            return {
+                "response": f"Error: {result.get('error_message', 'Unknown error')}"
+            }
+        
+        # ---- Conversation-first response (ProcessResponse) ----
+        text_response = result.get("text", "")
+        tool_calls = result.get("tool_calls", [])
+        requires_confirmation = result.get("requires_confirmation", False)
+        
+        # If confirmation is needed, ask the user without executing
+        if requires_confirmation:
+            actions = ", ".join(tc.get("tool_name", "action") for tc in tool_calls)
+            return {
+                "response": text_response or f"Please confirm: {actions}",
+                "requires_confirmation": True,
+                "tool_calls": tool_calls,
+            }
+        
+        # Auto-execute tool calls that don't need confirmation
+        tool_results = []
+        for tc in tool_calls:
+            if tc.get("requires_confirmation"):
+                continue  # Skip individually-flagged ones
+            try:
                 execute_response = requests.post(
                     f"{TOOL_BROKER_URL}/v1/execute",
                     json={
                         "type": "tool_call",
-                        "tool_name": result.get("tool_name"),
-                        "arguments": result.get("arguments", {}),
-                        "confidence": float(result.get("confidence", 1.0)),
+                        "tool_name": tc.get("tool_name"),
+                        "arguments": tc.get("arguments", {}),
+                        "confidence": float(tc.get("confidence", 1.0)),
                     },
                     headers=_auth_headers(),
                     timeout=30
                 )
                 execute_response.raise_for_status()
                 exec_result = execute_response.json()
-                
-                return {
-                    "response": exec_result.get("message", "Done"),
-                    "execution_time_ms": exec_result.get("execution_time_ms", 0)
-                }
-            
-            # If it's a clarification request
-            elif result.get("type") == "clarification_request":
-                return {
-                    "response": result.get("question", "Could you clarify that?")
-                }
-            
-            # If it's a confirmation request
-            elif result.get("type") == "confirmation_request":
-                return {
-                    "response": f"Please confirm: {result.get('summary', 'Execute this action?')}"
-                }
-            
-            # If it's an error response
-            elif result.get("error_code"):
-                return {
-                    "response": f"Error: {result.get('error_message', 'Unknown error')}"
-                }
-            
-            # Direct response with text
-            elif "response" in result:
-                return result
-                
-        # Fallback
-        return {"response": "I processed your request"}
+                tool_results.append({
+                    "tool_name": tc.get("tool_name"),
+                    "status": exec_result.get("status", "unknown"),
+                    "message": exec_result.get("message", ""),
+                })
+            except Exception as e:
+                tool_results.append({
+                    "tool_name": tc.get("tool_name"),
+                    "status": "failure",
+                    "message": str(e),
+                })
+        
+        # Build final response — LLM text is primary, tool results appended
+        final_response = text_response
+        if tool_results:
+            summaries = [r["message"] for r in tool_results if r.get("message")]
+            if summaries:
+                final_response = f"{text_response} ({'; '.join(summaries)})"
+        
+        return {
+            "response": final_response or "Done",
+            "tool_results": tool_results,
+        }
         
     except requests.exceptions.ConnectionError:
         return {

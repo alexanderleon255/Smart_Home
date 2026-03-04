@@ -31,6 +31,9 @@ from .schemas import (
     ToolCall,
     ClarificationRequest,
     ConfirmationRequest,
+    ConversationalResponse,
+    EmbeddedToolCall,
+    ProcessResponse,
     HealthResponse,
     ToolsResponse,
     ToolDefinition,
@@ -43,6 +46,7 @@ from .llm_client import LLMClient
 from .ha_client import HAClient, HAClientError
 from .validators import EntityValidator, ToolCallValidator
 from .policy_gate import PolicyGate
+from .audit_log import audit_logger, AuditLogger
 
 # Configure logging
 logging.basicConfig(
@@ -101,8 +105,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Tool Broker",
-    description="Bridge between Ollama LLM and Home Assistant",
-    version="1.0.0",
+    description="Conversation-first AI assistant with smart-home tool execution (DEC-008)",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -148,6 +152,46 @@ def _enforce_rate_limit(client_id: str, endpoint_path: str) -> bool:
         hits.append(now)
         _rate_limit_state[key] = hits
     return True
+
+
+@app.middleware("http")
+async def audit_middleware(request: Request, call_next):
+    """Attach request_id and record audit log for every request."""
+    request_id = AuditLogger.generate_request_id()
+    request.state.request_id = request_id
+    client_ip = request.client.host if request.client else "unknown"
+    start = time.time()
+
+    # Read body for input summary (only for POST)
+    input_summary = ""
+    if request.method == "POST":
+        try:
+            body_bytes = await request.body()
+            input_summary = body_bytes.decode("utf-8", errors="replace")[:500]
+        except Exception:
+            pass
+
+    response = await call_next(request)
+
+    latency_ms = int((time.time() - start) * 1000)
+
+    # Log to persistent audit file
+    try:
+        audit_logger.log_request(
+            request_id=request_id,
+            endpoint=request.url.path,
+            method=request.method,
+            client_ip=client_ip,
+            input_summary=input_summary,
+            latency_ms=latency_ms,
+            status_code=response.status_code,
+        )
+    except Exception as e:
+        logger.warning(f"Audit log write failed: {e}")
+
+    # Inject request-id header for traceability
+    response.headers["X-Request-Id"] = request_id
+    return response
 
 
 @app.middleware("http")
@@ -219,63 +263,83 @@ async def list_tools():
 async def process(
     request: ProcessRequest,
     x_api_key: str | None = Header(default=None, alias="X-API-Key")
-) -> Union[ToolCall, ClarificationRequest, ConfirmationRequest, ErrorResponse]:
+) -> Union[ProcessResponse, ErrorResponse]:
     """
-    Process natural language input and return structured tool call.
+    Process natural language input — conversation-first (DEC-008).
     
     This endpoint:
     1. Sends the text to Ollama with system prompt
-    2. Parses the LLM response
-    3. Validates the tool call
-    4. Returns the validated tool call or error
+    2. Parses conversation response with optional tool calls
+    3. Validates any tool calls (schema + entity)
+    4. Returns conversational text + validated tool calls
     
     Args:
         request: ProcessRequest with text field
         
     Returns:
-        ToolCall, ClarificationRequest, ConfirmationRequest, or ErrorResponse
+        ProcessResponse (text + tool_calls + tool_results) or ErrorResponse
     """
     _authorize_request(x_api_key)
     logger.info(f"Processing: {request.text[:100]}...")
     start_time = time.time()
     
     try:
-        # Call LLM
-        response = await llm_client.process(request.text, request.context)
+        # Call LLM — returns ConversationalResponse
+        conv = await llm_client.process(request.text, request.context)
         
-        # If it's a tool call, validate it
-        if isinstance(response, ToolCall):
+        validated_calls = []
+        needs_confirmation = False
+        validation_errors = []
+        
+        # Validate each tool call
+        for tc in conv.tool_calls:
+            call_dict = {
+                "type": "tool_call",
+                "tool_name": tc.tool_name,
+                "arguments": tc.arguments,
+                "confidence": tc.confidence,
+            }
+            
             # Schema validation
-            is_valid, error_msg = ToolCallValidator.validate_schema(response.model_dump())
+            is_valid, error_msg = ToolCallValidator.validate_schema(call_dict)
             if not is_valid:
-                return ErrorResponse(
-                    error_code="INVALID_SCHEMA",
-                    error_message=error_msg,
-                    retryable=True,
-                )
+                validation_errors.append(f"{tc.tool_name}: {error_msg}")
+                continue
             
             # Entity validation
-            is_valid, error_msg = await entity_validator.validate_tool_call(response.model_dump())
+            is_valid, error_msg = await entity_validator.validate_tool_call(call_dict)
             if not is_valid:
-                return ErrorResponse(
-                    error_code="INVALID_ENTITY",
-                    error_message=error_msg,
-                    retryable=True,
+                validation_errors.append(f"{tc.tool_name}: {error_msg}")
+                continue
+            
+            # Check high-risk override (server-side policy)
+            if is_high_risk_action(tc.tool_name, tc.arguments):
+                tc = EmbeddedToolCall(
+                    tool_name=tc.tool_name,
+                    arguments=tc.arguments,
+                    confidence=tc.confidence,
+                    requires_confirmation=True,
                 )
             
-            # Check if this is a high-risk action that needs confirmation
-            if is_high_risk_action(response.tool_name, response.arguments):
-                return ConfirmationRequest(
-                    type=ToolCallType.CONFIRMATION,
-                    action=response.tool_name,
-                    summary=f"Execute {response.tool_name} on {response.arguments.get('entity_id', 'unknown')}",
-                    risk_level="medium",
-                )
+            if tc.requires_confirmation:
+                needs_confirmation = True
+            
+            validated_calls.append(tc)
+        
+        # Append validation errors to text if any
+        text = conv.text
+        if validation_errors:
+            text += f" (Note: some actions couldn't be validated: {'; '.join(validation_errors)})"
         
         elapsed = int((time.time() - start_time) * 1000)
-        logger.info(f"Processed in {elapsed}ms: {response.type}")
+        logger.info(f"Processed in {elapsed}ms: {len(validated_calls)} tool calls, confirmation={'yes' if needs_confirmation else 'no'}")
         
-        return response
+        return ProcessResponse(
+            text=text,
+            tool_calls=validated_calls,
+            tool_results=[],
+            requires_confirmation=needs_confirmation,
+        )
         
     except ValueError as e:
         logger.error(f"Processing error: {e}")
@@ -408,6 +472,22 @@ async def execute(
     except Exception as e:
         logger.exception(f"Execution error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================================
+# Audit Endpoints
+# ============================================================================
+
+@app.get("/v1/audit/recent")
+async def audit_recent(limit: int = 50):
+    """Return recent audit log entries (newest first)."""
+    return {"entries": audit_logger.read_recent(limit=limit)}
+
+
+@app.get("/v1/audit/stats")
+async def audit_stats():
+    """Return aggregate audit statistics."""
+    return audit_logger.stats()
 
 
 # ============================================================================

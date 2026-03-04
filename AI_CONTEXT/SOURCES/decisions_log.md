@@ -48,6 +48,14 @@
 **Decision:** CORS origins explicitly listed. Default: `http://localhost:8123`, `http://homeassistant.local:8123`.  
 **Rationale:** Prevent cross-origin attacks from untrusted browser contexts.
 
+### DEC-008: Conversation-First LLM Architecture
+**Decided:** 2026-03-03  
+**Decision:** The LLM responds conversationally by default, with optional tool calls embedded in the response. Every response MUST include a `text` field with natural language; `tool_calls` is an array that may be empty.  
+**Rationale:** The previous architecture (JSON-only structured tool calls) lobotomized the LLM — forcing it to act as a pure intent-classifier instead of a conversational assistant. Most of the value of a local LLM comes from conversation, reasoning, memory recall, and general Q&A. Tool calls for device control are a subset of what the assistant should do, not its entire purpose.  
+**Previous architecture:** `{"type": "tool_call", "tool_name": ..., "arguments": ..., "confidence": ...}` — LLM restricted to structured JSON only, no conversational output.  
+**New architecture:** `{"text": "...", "tool_calls": [...]}` — conversation-first, tools-when-needed.  
+**Non-negotiable:** Yes — the LLM must always produce conversational output.
+
 ---
 
 ## Pending Decisions

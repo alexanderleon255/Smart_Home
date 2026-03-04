@@ -19,6 +19,8 @@ from tool_broker.schemas import (
     ToolCall,
     ClarificationRequest,
     ConfirmationRequest,
+    ConversationalResponse,
+    EmbeddedToolCall,
     ToolCallType,
 )
 from tool_broker.validators import EntityValidator, ToolCallValidator
@@ -332,14 +334,16 @@ async def client():
          patch("tool_broker.main.ha_client") as mock_ha, \
          patch("tool_broker.main.entity_validator") as mock_validator:
         
-        # Configure mocks
+        # Configure mocks — conversation-first format (DEC-008)
         mock_llm.check_health = AsyncMock(return_value=True)
         mock_llm.model = "llama3.1:8b"
-        mock_llm.process = AsyncMock(return_value=ToolCall(
-            type=ToolCallType.TOOL_CALL,
-            tool_name="ha_service_call",
-            arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
-            confidence=0.95
+        mock_llm.process = AsyncMock(return_value=ConversationalResponse(
+            text="Living room lights are on.",
+            tool_calls=[EmbeddedToolCall(
+                tool_name="ha_service_call",
+                arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                confidence=0.95,
+            )],
         ))
         
         mock_ha.is_configured = True
@@ -384,30 +388,35 @@ async def test_tools_endpoint(client):
 
 @pytest.mark.asyncio
 async def test_process_valid_request(client):
-    """Process endpoint should return tool call for valid request."""
+    """Process endpoint should return conversational response with tool call."""
     response = await client.post("/v1/process", json={"text": "Turn on the living room light"})
     assert response.status_code == 200
     data = response.json()
-    assert data["type"] == "tool_call"
-    assert data["tool_name"] == "ha_service_call"
-    assert "confidence" in data
+    # Conversation-first: response always has text + tool_calls
+    assert "text" in data
+    assert data["text"] == "Living room lights are on."
+    assert len(data["tool_calls"]) == 1
+    assert data["tool_calls"][0]["tool_name"] == "ha_service_call"
+    assert data["requires_confirmation"] is False
 
 
 
 @pytest.mark.asyncio
 async def test_process_detects_high_risk_and_requests_confirmation():
-    """Process endpoint should detect high-risk actions and return ConfirmationRequest."""
+    """Process endpoint should detect high-risk actions and set requires_confirmation."""
     from httpx import ASGITransport
     from tool_broker import main as main_module
 
     with patch("tool_broker.main.llm_client") as mock_llm, \
          patch("tool_broker.main.entity_validator") as mock_validator:
-        # Mock LLM to return a high-risk unlock action
-        mock_llm.process = AsyncMock(return_value=ToolCall(
-            type=ToolCallType.TOOL_CALL,
-            tool_name="ha_service_call",
-            arguments={"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"},
-            confidence=0.95,
+        # Mock LLM to return a high-risk unlock action (conversation-first format)
+        mock_llm.process = AsyncMock(return_value=ConversationalResponse(
+            text="I can unlock the front door for you.",
+            tool_calls=[EmbeddedToolCall(
+                tool_name="ha_service_call",
+                arguments={"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"},
+                confidence=0.95,
+            )],
         ))
         mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
 
@@ -416,10 +425,11 @@ async def test_process_detects_high_risk_and_requests_confirmation():
             response = await ac.post("/v1/process", json={"text": "Unlock the front door"})
             assert response.status_code == 200
             data = response.json()
-            # Should return ConfirmationRequest type for high-risk action
-            assert data["type"] == "confirmation_request"
-            assert data["action"] == "ha_service_call"
-            assert data["risk_level"] == "medium"
+            # Should flag requires_confirmation for high-risk action
+            assert data["requires_confirmation"] is True
+            assert data["text"] == "I can unlock the front door for you."
+            assert len(data["tool_calls"]) == 1
+            assert data["tool_calls"][0]["requires_confirmation"] is True
 
 @pytest.mark.asyncio
 async def test_api_key_auth_enforced_on_protected_endpoints():
@@ -434,11 +444,13 @@ async def test_api_key_auth_enforced_on_protected_endpoints():
         with patch("tool_broker.main.llm_client") as mock_llm, \
              patch("tool_broker.main.ha_client") as mock_ha, \
              patch("tool_broker.main.entity_validator") as mock_validator:
-            mock_llm.process = AsyncMock(return_value=ToolCall(
-                type=ToolCallType.TOOL_CALL,
-                tool_name="ha_service_call",
-                arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
-                confidence=0.95,
+            mock_llm.process = AsyncMock(return_value=ConversationalResponse(
+                text="Living room lights are on.",
+                tool_calls=[EmbeddedToolCall(
+                    tool_name="ha_service_call",
+                    arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                    confidence=0.95,
+                )],
             ))
 
             mock_ha.call_service = AsyncMock(return_value=[])
@@ -505,11 +517,13 @@ async def test_rate_limiter_returns_429_on_second_request_when_limit_is_one():
         with patch("tool_broker.main.llm_client") as mock_llm, \
              patch("tool_broker.main.ha_client") as mock_ha, \
              patch("tool_broker.main.entity_validator") as mock_validator:
-            mock_llm.process = AsyncMock(return_value=ToolCall(
-                type=ToolCallType.TOOL_CALL,
-                tool_name="ha_service_call",
-                arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
-                confidence=0.95,
+            mock_llm.process = AsyncMock(return_value=ConversationalResponse(
+                text="Living room lights are on.",
+                tool_calls=[EmbeddedToolCall(
+                    tool_name="ha_service_call",
+                    arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                    confidence=0.95,
+                )],
             ))
             mock_ha.call_service = AsyncMock(return_value=[])
             mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
@@ -578,6 +592,149 @@ async def test_execute_high_risk_action_requires_confirmation_flag():
                 assert allowed.status_code == 200
     finally:
         main_module.config.rate_limit_enabled = original_rate_enabled
+
+
+# ============================================================================
+# Conversation-First Architecture Tests (DEC-008)
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_process_pure_conversation():
+    """Process endpoint should handle pure conversation (no tool calls)."""
+    from httpx import ASGITransport
+
+    with patch("tool_broker.main.llm_client") as mock_llm, \
+         patch("tool_broker.main.entity_validator") as mock_validator:
+        mock_llm.process = AsyncMock(return_value=ConversationalResponse(
+            text="Salmon's great on a cedar plank! 400°F for about 15 minutes.",
+            tool_calls=[],
+        ))
+        mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/v1/process", json={"text": "What's a good recipe for salmon?"})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["text"].startswith("Salmon")
+            assert data["tool_calls"] == []
+            assert data["requires_confirmation"] is False
+
+
+@pytest.mark.asyncio
+async def test_process_conversation_with_multiple_tool_calls():
+    """Process endpoint should handle conversation with multiple tool calls."""
+    from httpx import ASGITransport
+
+    with patch("tool_broker.main.llm_client") as mock_llm, \
+         patch("tool_broker.main.entity_validator") as mock_validator:
+        mock_llm.process = AsyncMock(return_value=ConversationalResponse(
+            text="Good morning! Setting up your morning routine.",
+            tool_calls=[
+                EmbeddedToolCall(
+                    tool_name="ha_service_call",
+                    arguments={"domain": "light", "service": "turn_on", "entity_id": "light.bedroom"},
+                    confidence=0.92,
+                ),
+                EmbeddedToolCall(
+                    tool_name="ha_service_call",
+                    arguments={"domain": "light", "service": "turn_on", "entity_id": "light.living_room"},
+                    confidence=0.90,
+                ),
+            ],
+        ))
+        mock_validator.validate_tool_call = AsyncMock(return_value=(True, ""))
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/v1/process", json={"text": "Start my morning routine"})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["text"] == "Good morning! Setting up your morning routine."
+            assert len(data["tool_calls"]) == 2
+            assert data["requires_confirmation"] is False
+
+
+# ============================================================================
+# LLM Client _parse_response Tests
+# ============================================================================
+
+class TestLLMClientParseResponse:
+    """Tests for the LLM client's _parse_response method."""
+
+    def setup_method(self):
+        """Create an LLMClient instance for parsing tests."""
+        with patch("tool_broker.llm_client.get_tool_list_for_prompt", return_value=""):
+            from tool_broker.llm_client import LLMClient
+            self.client = LLMClient()
+
+    def test_parse_conversation_first_format(self):
+        """Should parse {text, tool_calls} format correctly."""
+        response = '{"text": "Lights are on.", "tool_calls": [{"tool_name": "ha_service_call", "arguments": {"domain": "light", "service": "turn_on", "entity_id": "light.living_room"}, "confidence": 0.95}]}'
+        result = self.client._parse_response(response)
+        assert isinstance(result, ConversationalResponse)
+        assert result.text == "Lights are on."
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].tool_name == "ha_service_call"
+        assert result.tool_calls[0].confidence == 0.95
+
+    def test_parse_pure_conversation(self):
+        """Should parse pure conversation (empty tool_calls)."""
+        response = '{"text": "I am doing great!", "tool_calls": []}'
+        result = self.client._parse_response(response)
+        assert isinstance(result, ConversationalResponse)
+        assert result.text == "I am doing great!"
+        assert result.tool_calls == []
+
+    def test_parse_text_without_tool_calls(self):
+        """Should handle text field with missing tool_calls (default to empty)."""
+        response = '{"text": "Just chatting."}'
+        result = self.client._parse_response(response)
+        assert isinstance(result, ConversationalResponse)
+        assert result.text == "Just chatting."
+        assert result.tool_calls == []
+
+    def test_parse_legacy_tool_call_format(self):
+        """Should handle legacy {type: tool_call} format gracefully."""
+        response = '{"type": "tool_call", "tool_name": "ha_service_call", "arguments": {"domain": "light", "service": "turn_on", "entity_id": "light.living_room"}, "confidence": 0.90}'
+        result = self.client._parse_response(response)
+        assert isinstance(result, ConversationalResponse)
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].tool_name == "ha_service_call"
+
+    def test_parse_legacy_clarification_format(self):
+        """Should handle legacy {type: clarification_request} format."""
+        response = '{"type": "clarification_request", "question": "Which light?"}'
+        result = self.client._parse_response(response)
+        assert isinstance(result, ConversationalResponse)
+        assert result.text == "Which light?"
+        assert result.tool_calls == []
+
+    def test_parse_unknown_tool_filtered_out(self):
+        """Should filter out tool calls referencing unknown tools."""
+        response = '{"text": "Trying something.", "tool_calls": [{"tool_name": "nonexistent_tool", "arguments": {}, "confidence": 0.8}]}'
+        result = self.client._parse_response(response)
+        assert isinstance(result, ConversationalResponse)
+        assert result.text == "Trying something."
+        assert result.tool_calls == []
+
+    def test_parse_confidence_clamping(self):
+        """Should clamp confidence to 0.0-1.0 range."""
+        response = '{"text": "OK.", "tool_calls": [{"tool_name": "ha_service_call", "arguments": {"domain": "light", "service": "turn_on", "entity_id": "light.living_room"}, "confidence": 1.5}]}'
+        result = self.client._parse_response(response)
+        assert result.tool_calls[0].confidence == 1.0
+
+    def test_parse_json_in_markdown_fence(self):
+        """Should extract JSON from markdown code fences."""
+        response = '```json\n{"text": "Hello!", "tool_calls": []}\n```'
+        result = self.client._parse_response(response)
+        assert result.text == "Hello!"
+
+    def test_parse_requires_confirmation(self):
+        """Should preserve requires_confirmation flag."""
+        response = '{"text": "Unlocking.", "tool_calls": [{"tool_name": "ha_service_call", "arguments": {"domain": "lock", "service": "unlock", "entity_id": "lock.front_door"}, "confidence": 0.9, "requires_confirmation": true}]}'
+        result = self.client._parse_response(response)
+        assert result.tool_calls[0].requires_confirmation is True
 
 
 # ============================================================================

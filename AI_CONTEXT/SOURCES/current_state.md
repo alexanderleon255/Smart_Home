@@ -1,7 +1,7 @@
 # Smart Home — Current State
 
 **Created:** 2026-03-02  
-**Last Updated:** 2026-03-02  
+**Last Updated:** 2026-03-02 (Rev 2 — Post GAP-06/10/11 Closure)  
 **Purpose:** What is installed, current phase, blockers, next actions
 
 ---
@@ -15,16 +15,31 @@
 ### Software — Production Ready
 | Component | Location | Status | Tests |
 |-----------|----------|--------|-------|
-| Tool Broker (FastAPI) | `Smart_Home/tool_broker/` | Production-hardened | 34 tests |
-| Memory Layers (4-tier) | `Smart_Home/memory/` | Complete | 3 tests |
+| Tool Broker (FastAPI) | `Smart_Home/tool_broker/` | Production-hardened | 34 tests (test_tool_broker.py) |
+| Memory Layers (4-tier) | `Smart_Home/memory/` | Complete | 3 tests (test_memory_layers.py) |
+| Context Builder | `Smart_Home/memory/context_builder.py` | Complete | 26 tests (test_context_builder.py) |
 | PolicyGate | `Smart_Home/tool_broker/policy_gate.py` | Complete | Tested via broker |
-| Secretary Pipeline | `Smart_Home/secretary/` | All 7 items complete | — |
-| Voice Loop | `Smart_Home/jarvis/voice_loop.py` | Software complete | — |
+| Secretary Pipeline | `Smart_Home/secretary/` | All 7 items complete | 15 tests (test_secretary.py) |
+| Voice Loop | `Smart_Home/jarvis/voice_loop.py` | Software complete | 10 tests (test_jarvis_audio.py) |
 | STT Client (streaming) | `Smart_Home/jarvis/stt_client.py` | Software complete | — |
 | TTS Controller | `Smart_Home/jarvis/tts_controller.py` | Software complete | — |
 | Wake Word Detector | `Smart_Home/jarvis/wake_word_detector.py` | Software complete | — |
 | Barge-In | `Smart_Home/jarvis/barge_in.py` | Software complete | — |
-| Advanced Features (P8) | `Smart_Home/advanced/` | All 6 modules complete | test_advanced_features.py |
+| Advanced Features (P8) | `Smart_Home/advanced/` | All 6 modules complete | test_advanced_features.py (requires chromadb) |
+
+### Test Suite Summary (136 tests, all passing)
+| Test File | Count | Coverage Area |
+|-----------|-------|---------------|
+| `test_tool_broker.py` | 34 | Broker endpoints, auth, rate limiting, PolicyGate |
+| `test_context_builder.py` | 26 | 4-tier memory assembly, token budgets |
+| `test_secretary.py` | 15 | Secretary pipeline (notes, memory, hooks) |
+| `test_digests.py` | 15 | Daily/weekly digest generation |
+| `test_patterns.py` | 13 | Behavioral learner pattern recognition |
+| `test_cameras.py` | 11 | Camera processor modules |
+| `test_jarvis_audio.py` | 10 | Voice loop audio modules |
+| `test_satellites.py` | 9 | Satellite discovery protocol |
+| `test_memory_layers.py` | 3 | Structured state + event log tiers |
+| `test_advanced_features.py` | — | Requires chromadb (excluded from default run) |
 
 ### Software — Not Yet Live
 | Component | Reason |
@@ -42,6 +57,7 @@
 **Phases 100% done:** P7 (Secretary), P8 (Advanced AI)  
 **Phases >50% done:** P2 (AI Sidecar, 86%)  
 **Main blocker:** Phase 1 hardware not yet acquired
+**Total tests:** 136 passing (6.3s)
 
 ---
 

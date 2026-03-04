@@ -120,7 +120,7 @@ BlackHole captures both directions → ffmpeg → session_YYYYMMDD.wav
 | Network | Wi-Fi / Ethernet adapter |
 | Runtime | Ollama + Tool Broker |
 
-**Role:** Intelligent processing layer. Handles natural language interpretation, web search, and complex reasoning. Outputs structured JSON tool calls that HA validates and executes.
+**Role:** Intelligent processing layer. Handles natural language conversation, reasoning, web search, memory recall, and complex Q&A. When device control or actions are needed, the LLM includes structured tool calls alongside its conversational response. The Tool Broker validates and executes any tool calls while passing the conversational text through to the voice loop or UI.
 
 ### 4.3 Client Devices
 
@@ -284,7 +284,7 @@ BlackHole captures both directions → ffmpeg → session_YYYYMMDD.wav
 | Llama 3.1 8B | Primary model (custom Jarvis Modelfile) | **ACTIVE** |
 | Tool Broker | HTTP API for tool calls | Planned |
 
-> **Interface Contracts:** All communication between LLM, Tool Broker, and Home Assistant follows strict schemas defined in `References/Explicit_Interface_Contracts_v1.0.md`. The LLM outputs structured tool calls; the Broker validates and executes; HA returns normalized responses. No component may bypass these contracts.
+> **Interface Contracts:** All communication between LLM, Tool Broker, and Home Assistant follows strict schemas defined in `References/Explicit_Interface_Contracts_v1.0.md`. The LLM responds conversationally (`text` field) and optionally includes structured `tool_calls` when actions are needed (DEC-008). The Broker validates and executes any tool calls; HA returns normalized responses. No component may bypass these contracts.
 
 ### 5.4 Real-Time Voice Architecture (Jarvis) — NEW
 
@@ -446,7 +446,7 @@ Constraints:
 |-------|-------|------------------|
 | **Layer 0 — Hardware & Protocol** | Home Assistant | Zigbee, Z-Wave, WiFi, MQTT, ESPHome, device registry, state persistence |
 | **Layer 1 — Deterministic Automation** | Home Assistant | Time-based schedules, safety rules, leak detection, lock failsafes, motion triggers |
-| **Layer 2 — LLM Interpretation** | Llama (Ollama) | NL → structured service calls, intent parsing, device queries, rule creation |
+| **Layer 2 — LLM Conversation + Actions** | Llama (Ollama) | Conversational AI, reasoning, Q&A, memory recall; when actions needed: NL → structured tool calls for device control, web search, reminders |
 | **Layer 3 — Semi-Autonomous Suggestions** | Llama + Human | Pattern detection, automation proposals, energy optimization (approval required) |
 | **Layer 4 — Proactive Intelligence** | Llama (batch) | Nightly log analysis, anomaly detection, summaries, behavioral patterns |
 
@@ -509,17 +509,21 @@ Constraints:
                             │
                             ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│  STEP 2: LLM INTERPRETATION (Mac M1)                              │
+│  STEP 2: LLM CONVERSATION + ACTIONS (Mac M1)                      │
 │  • Tool Broker receives text                                      │
-│  • Ollama processes with system prompt                            │
-│  • Output: Structured JSON tool call                              │
+│  • Ollama processes with system prompt + memory context            │
+│  • Output: Conversational text + optional tool calls              │
 │  │                                                                │
 │  │  Example output:                                               │
 │  │  {                                                             │
-│  │    "tool": "control_device",                                   │
-│  │    "entity_id": "light.living_room",                           │
-│  │    "action": "turn_on",                                        │
-│  │    "parameters": {"brightness": 80}                            │
+│  │    "text": "Sure, setting the living room to 80%.",            │
+│  │    "tool_calls": [{                                            │
+│  │      "tool_name": "ha_service_call",                           │
+│  │      "arguments": {"domain": "light",                          │
+│  │        "service": "turn_on",                                   │
+│  │        "entity_id": "light.living_room",                       │
+│  │        "data": {"brightness_pct": 80}},                        │
+│  │      "confidence": 0.95}]                                      │
 │  │  }                                                             │
 └───────────────────────────┬───────────────────────────────────────┘
                             │
@@ -940,8 +944,8 @@ See `ROADMAPS/2026-03-02_smart_home_master_roadmap.md` for detailed milestones.
 | `automation_catalog.md` | HA automation definitions, trigger/action specs | Draft (placeholder) |
 | `device_inventory.md` | Device list, entity naming, protocol assignments | Draft (placeholder) |
 | `chat_operating_protocol.md` | How to work with Alex in ChatGPT threads | Planned |
-| `current_state.md` | What is installed, current phase, blockers, next actions | Planned |
-| `decisions_log.md` | Locked decisions, non-negotiables, rejected options | Planned |
+| `current_state.md` | What is installed, current phase, blockers, next actions | Active |
+| `decisions_log.md` | Locked decisions, non-negotiables, rejected options | Active |
 
 ### Planning Documents
 
