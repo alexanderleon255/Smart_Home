@@ -57,6 +57,8 @@ manager = ProcessManager(
 activity_log: deque = deque(maxlen=500)
 chat_history: list = []  # [{role, content, tool_calls, timestamp}]
 seen_request_ids: set = set()  # Track audit entries we've already processed
+dashboard_request_ids: set = set()  # Request IDs from dashboard chat (skip in poll)
+chat_seen_ids: set = set()  # Audit entries already injected into chat
 
 
 def _log(kind: str, data: dict):
@@ -322,6 +324,7 @@ def build_layout():
 
         # Hidden stores
         dcc.Store(id="chat-store", data=[]),
+        dcc.Interval(id="chat-poll-interval", interval=3_000, n_intervals=0),
     ])
 
 
@@ -409,17 +412,16 @@ def handle_controls(start_broker, stop_broker, start_ollama, stop_ollama):
     State("chat-store", "data"),
     prevent_initial_call=True,
 )
-def send_message(n_clicks, n_submit, text, history):
+def send_message(n_clicks, n_submit, text, _history):
     """Send user message to /v1/process, auto-execute tool calls, render response."""
     if not text or not text.strip():
         return no_update, no_update, no_update
 
     text = text.strip()
-    history = history or []
     now = datetime.now().strftime("%H:%M:%S")
 
-    # Add user message
-    history.append({"role": "user", "content": text, "ts": now})
+    # Add user message to server-side chat history (single source of truth)
+    chat_history.append({"role": "user", "content": text, "ts": now})
     _log("USER_INPUT", {"text": text})
 
     # Call Tool Broker
@@ -431,6 +433,11 @@ def send_message(n_clicks, n_submit, text, history):
         )
         resp.raise_for_status()
         data = resp.json()
+
+        # Track this request so the poll callback skips it
+        req_id = resp.headers.get("x-request-id")
+        if req_id:
+            dashboard_request_ids.add(req_id)
 
         assistant_text = data.get("text", "")
         tool_calls = data.get("tool_calls", [])
@@ -491,7 +498,7 @@ def send_message(n_clicks, n_submit, text, history):
                 })
                 _log("TOOL_ERROR", {"tool": tc.get("tool_name"), "error": str(exec_err)})
 
-        history.append({
+        chat_history.append({
             "role": "assistant",
             "content": assistant_text,
             "tool_calls": tool_calls,
@@ -503,16 +510,16 @@ def send_message(n_clicks, n_submit, text, history):
 
     except httpx.ConnectError:
         err_msg = "Cannot connect to Tool Broker. Is it running?"
-        history.append({"role": "error", "content": err_msg, "ts": now})
+        chat_history.append({"role": "error", "content": err_msg, "ts": now})
         _log("ERROR", {"message": err_msg})
     except Exception as exc:
         err_msg = f"Error: {exc}"
-        history.append({"role": "error", "content": err_msg, "ts": now})
+        chat_history.append({"role": "error", "content": err_msg, "ts": now})
         _log("ERROR", {"message": err_msg})
 
-    # Render chat
-    elements = _render_chat(history)
-    return elements, history, ""
+    # Render from server-side chat history
+    elements = _render_chat(chat_history)
+    return elements, list(chat_history), ""
 
 
 def _render_chat(history):
@@ -526,6 +533,13 @@ def _render_chat(history):
         ts = msg.get("ts", "")
 
         if role == "user":
+            source = msg.get("source")
+            header_items = [html.Span(ts, style={"fontSize": "10px", "color": "#6c7086"})]
+            if source:
+                header_items.append(html.Span(f"via {source}", style={
+                    "fontSize": "9px", "color": "#fab387", "fontFamily": "monospace",
+                    "background": "#181825", "padding": "1px 6px", "borderRadius": "4px",
+                }))
             elements.append(html.Div(style={
                 "alignSelf": "flex-end",
                 "background": "#313244",
@@ -533,23 +547,30 @@ def _render_chat(history):
                 "borderRadius": "12px 12px 2px 12px",
                 "maxWidth": "80%",
             }, children=[
-                html.Span(ts, style={"fontSize": "10px", "color": "#6c7086"}),
+                html.Div(style={"display": "flex", "alignItems": "center", "gap": "6px"}, children=header_items),
                 html.P(msg["content"], style={"margin": "4px 0 0 0"}),
             ]))
 
         elif role == "assistant":
             tier = msg.get("tier", "")
+            source = msg.get("source")
             tier_color = "#a6e3a1" if tier == "local" else "#89b4fa" if tier == "sidecar" else "#6c7086"
             tier_label = f"[{tier}]" if tier else ""
 
+            header_badges = [html.Span(ts, style={"fontSize": "10px", "color": "#6c7086"})]
+            if tier_label:
+                header_badges.append(html.Span(tier_label, style={
+                    "fontSize": "9px", "color": tier_color, "fontFamily": "monospace",
+                    "background": "#181825", "padding": "1px 6px", "borderRadius": "4px",
+                }))
+            if source:
+                header_badges.append(html.Span(f"via {source}", style={
+                    "fontSize": "9px", "color": "#fab387", "fontFamily": "monospace",
+                    "background": "#181825", "padding": "1px 6px", "borderRadius": "4px",
+                }))
+
             children = [
-                html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=[
-                    html.Span(ts, style={"fontSize": "10px", "color": "#6c7086"}),
-                    html.Span(tier_label, style={
-                        "fontSize": "9px", "color": tier_color, "fontFamily": "monospace",
-                        "background": "#181825", "padding": "1px 6px", "borderRadius": "4px",
-                    }) if tier_label else html.Span(),
-                ]),
+                html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=header_badges),
                 html.P(msg["content"], style={"margin": "4px 0 0 0"}),
             ]
 
@@ -634,6 +655,98 @@ def _render_chat(history):
             }, children=[html.P(msg["content"], style={"margin": 0})]))
 
     return elements
+
+
+# ---------------------------------------------------------------------------
+# External chat injection — polls audit log for non-dashboard interactions
+# ---------------------------------------------------------------------------
+
+@app.callback(
+    Output("chat-messages", "children", allow_duplicate=True),
+    Output("chat-store", "data", allow_duplicate=True),
+    Input("chat-poll-interval", "n_intervals"),
+    prevent_initial_call=True,
+)
+def poll_external_chat(n):
+    """Inject external LLM interactions (curl, Jarvis, API) into the chat panel."""
+    changed = False
+
+    try:
+        resp = httpx.get(
+            f"{BROKER_URL}/v1/audit/recent",
+            params={"limit": 50},
+            timeout=3.0,
+        )
+        if resp.status_code != 200:
+            return no_update, no_update
+
+        entries = resp.json().get("entries", [])
+        for entry in reversed(entries):  # oldest first
+            req_id = entry.get("request_id")
+            if not req_id:
+                continue
+            if req_id in chat_seen_ids:
+                continue
+            # Dashboard-originated — already in chat via send_message
+            if req_id in dashboard_request_ids:
+                chat_seen_ids.add(req_id)
+                continue
+            # Only care about /v1/process interactions
+            if entry.get("endpoint") != "/v1/process":
+                chat_seen_ids.add(req_id)
+                continue
+
+            chat_seen_ids.add(req_id)
+
+            # Parse user input from JSON body
+            input_summary = entry.get("input_summary", "")
+            user_text = input_summary
+            try:
+                input_json = json.loads(input_summary)
+                user_text = input_json.get("text", input_summary)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            # Parse output
+            output_summary = entry.get("output_summary", "")
+            extra = entry.get("extra") or {}
+            tier = extra.get("tier", "unknown")
+
+            ts = entry.get("timestamp", "")
+            try:
+                ts = datetime.fromisoformat(ts).strftime("%H:%M:%S")
+            except Exception:
+                pass
+
+            source = entry.get("client_ip", "api")
+
+            if user_text:
+                chat_history.append({
+                    "role": "user",
+                    "content": user_text,
+                    "ts": ts,
+                    "source": source,
+                })
+
+            if output_summary:
+                chat_history.append({
+                    "role": "assistant",
+                    "content": output_summary,
+                    "tool_calls": [],
+                    "tool_results": [],
+                    "tier": tier,
+                    "ts": ts,
+                    "source": source,
+                })
+
+            changed = True
+    except Exception:
+        pass
+
+    if not changed:
+        return no_update, no_update
+
+    return _render_chat(chat_history), list(chat_history)
 
 
 @app.callback(

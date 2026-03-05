@@ -14,6 +14,7 @@ API Endpoints:
 - POST /v1/execute - Execute a validated tool call
 """
 
+import json
 import logging
 import time
 import threading
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load .env file from project root
@@ -194,6 +195,37 @@ async def audit_middleware(request: Request, call_next):
 
     latency_ms = int((time.time() - start) * 1000)
 
+    # For /v1/process, capture response body for full audit trail
+    output_summary = ""
+    tool_calls_count = 0
+    extra: dict = {}
+    if request.url.path == "/v1/process" and response.status_code == 200:
+        try:
+            resp_body = b""
+            async for chunk in response.body_iterator:
+                resp_body += chunk
+            # Re-create response FIRST to guarantee body is never lost
+            response = Response(
+                content=resp_body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.media_type,
+            )
+            # Now safely parse for audit metadata
+            try:
+                resp_json = json.loads(resp_body)
+                output_summary = resp_json.get("text", "")[:500]
+                tool_calls_count = len(resp_json.get("tool_calls", []))
+                extra = {
+                    "tier": resp_json.get("tier", "unknown"),
+                    "llm_error": resp_json.get("llm_error", False),
+                    "tool_calls_count": tool_calls_count,
+                }
+            except (json.JSONDecodeError, Exception):
+                pass
+        except Exception as e:
+            logger.warning(f"Audit: failed to capture response body: {e}")
+
     # Log to persistent audit file
     try:
         audit_logger.log_request(
@@ -202,8 +234,11 @@ async def audit_middleware(request: Request, call_next):
             method=request.method,
             client_ip=client_ip,
             input_summary=input_summary,
+            output_summary=output_summary,
             latency_ms=latency_ms,
             status_code=response.status_code,
+            tool_calls=tool_calls_count,
+            extra=extra if extra else None,
         )
     except Exception as e:
         logger.warning(f"Audit log write failed: {e}")
