@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-02  
 **Last Updated:** 2026-03-05  
-**Status:** Active (Rev 5.0 -- Diagnostic pattern, deploy bootstrap, service persistence)
+**Status:** Active (Rev 6.0 -- Codebase assessment, diagnostic pattern, deploy bootstrap)
 
 ---
 
@@ -22,8 +22,9 @@
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
 **Tests:** 248 passing (pytest, ~22s)  
-**Code:** ~11,600 LOC across 11 packages  
-**Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi
+**Code:** 12,409 LOC (8,928 source + 3,481 test) across 11 packages  
+**Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi  
+**Assessment Grade:** B+ (2026-03-04 full codebase review)
 
 ---
 
@@ -150,7 +151,7 @@
 | P7-06 | Session Archival System | ✅ COMPLETE | 2026-03-02 | Directory structure, indexing, retention policy |
 | P7-07 | Automation Hook Detection | ✅ COMPLETE | 2026-03-02 | Trigger phrase detection and actionable item generation |
 
-**Phase 7 Status:** ✅ **COMPLETE**
+**Phase 7 Status:** ✅ **COMPLETE** (with caveat: P7-01 transcription.py is a placeholder returning hardcoded text — needs whisper.cpp wiring)
 
 ---
 
@@ -165,7 +166,7 @@
 | P8-05 | AI Camera Inference | ✅ COMPLETE | 2026-03-02 | camera processor module |
 | P8-06 | Behavioral Pattern Detection | ✅ COMPLETE | 2026-03-02 | behavioral learner module |
 
-**Phase 8 Status:** ✅ **COMPLETE**
+**Phase 8 Status:** ✅ **COMPLETE** (with caveats: vector store has ID collision bug via hash(text)%10000; context_builder calls nonexistent search_conversations() method)
 
 ---
 
@@ -198,6 +199,9 @@
 | 2026-03-04 | Audio pipeline install | P6-05, P6-06 | whisper.cpp built, Piper installed, PyAudio, openWakeWord on Pi |
 | 2026-03-04 | Linux audio migration | P6-02, P6-03 | All 6 audio files updated macOS->Linux; PipeWire virtual devices |
 | 2026-03-04 | SonoBus + wiring | P6-01 | SonoBus built from source ARM64, PipeWire JACK shim, wire scripts |
+| 2026-03-04 | Tiered LLM + tests | - | Tiered routing (local+sidecar), complexity classifier, 194 tests |
+| 2026-03-04 | Graceful tier failures | P2-07 | TierStatus enum, TierDiagnostic, per-tier error messages, 28 new tests (commit f78f369) |
+| 2026-03-04 | Codebase assessment | - | Full review: grade B+, 6 bugs found, 15-item priority queue, assessment report created |
 | 2026-03-05 | Service persistence | P1-09 | 5 systemd user units, linger, Ollama 0.0.0.0 fix, deploy/ bootstrap |
 | 2026-03-05 | Diagnostic pattern | P2-07 | HADiagnostic + TierDiagnostic pattern across HA client, dashboard, Jarvis client, audio pipeline; 248 tests passing |
 
