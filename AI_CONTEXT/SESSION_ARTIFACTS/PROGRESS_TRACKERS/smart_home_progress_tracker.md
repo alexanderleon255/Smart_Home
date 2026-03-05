@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-02  
 **Last Updated:** 2026-03-05  
-**Status:** Active (Rev 6.0 -- Codebase assessment, diagnostic pattern, deploy bootstrap)
+**Status:** Active (Rev 7.0 -- Audit/dashboard chat visibility, systemd deploy, diagnostic patterns)
 
 ---
 
@@ -11,18 +11,18 @@
 | Phase | Name | Items | Complete | Status |
 |-------|------|-------|----------|--------|
 | P1 | Hub Setup | 9 | 6 | 🟢 67% |
-| P2 | AI Sidecar | 7 | 7 | 🟢 100% |
+| P2 | AI Sidecar | 8 | 8 | 🟢 100% |
 | P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
 | P4 | Security Hardening | 6 | 2 | 🟡 33% |
 | P5 | Camera Integration | 5 | 0 | 🔴 0% |
 | P6 | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
-| **TOTAL** | | **56** | **36** | **🟢 64%** |
+| **TOTAL** | | **57** | **37** | **🟢 65%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
-**Tests:** 248 passing (pytest, ~22s)  
-**Code:** 12,409 LOC (8,928 source + 3,481 test) across 11 packages  
+**Tests:** 248 passing (pytest, ~26s)  
+**Code:** 12,904 LOC (9,518 source + 3,386 test) across 11 packages  
 **Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi  
 **Assessment Grade:** B+ (2026-03-04 full codebase review)
 
@@ -57,12 +57,14 @@
 | P2-05 | Home Assistant API Integration | ✅ COMPLETE | 2026-03-02 | ha_client.py with async service calls |
 | P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation; 46 entities cached |
 | P2-07 | End-to-End Test | ✅ COMPLETE | 2026-03-04 | Live HA + Ollama + Tool Broker verified on Pi; graceful tier failure diagnostics (HADiagnostic/TierDiagnostic pattern) |
+| P2-08 | Dashboard Chat Visibility | ✅ COMPLETE | 2026-03-05 | Audit middleware captures response body (output_summary, tier, tool_calls); dashboard polls audit log every 3s and injects ALL external LLM interactions (curl, Jarvis, API) into chat panel with source badges |
 
 **Phase 2 Status:** ✅ **COMPLETE**
 - Tool Broker migrated from Mac to Pi (runs at localhost:8000)
 - Tiered LLM: local qwen2.5:1.5b (fast, simple) + sidecar llama3.1:8b on Mac (complex queries)
 - Dashboard with chat, activity log, tier badges deployed
-- 46 HA entities in validator cache
+- ALL LLM interactions (any source) visible in dashboard chat panel
+- 48 HA entities in validator cache
 - E2E verified: text -> LLM -> tool call -> HA execution -> response
 
 ---
@@ -204,6 +206,7 @@
 | 2026-03-04 | Codebase assessment | - | Full review: grade B+, 6 bugs found, 15-item priority queue, assessment report created |
 | 2026-03-05 | Service persistence | P1-09 | 5 systemd user units, linger, Ollama 0.0.0.0 fix, deploy/ bootstrap |
 | 2026-03-05 | Diagnostic pattern | P2-07 | HADiagnostic + TierDiagnostic pattern across HA client, dashboard, Jarvis client, audio pipeline; 248 tests passing |
+| 2026-03-05 | Dashboard chat visibility | P2-08 | Audit middleware captures response body; dashboard polls audit + injects ALL external interactions into chat; source badges; 248 tests |
 
 ---
 

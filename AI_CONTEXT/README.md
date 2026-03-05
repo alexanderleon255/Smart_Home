@@ -38,13 +38,15 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 
 ## 3. Current State
 
-**As of 2026-03-04:**
-- **35/55 items complete (64%)** — P2, P7, P8 fully done; P1, P4, P6 in progress
-- Pi 5 running Debian Bookworm with HA (Docker), Tool Broker, Ollama, PipeWire
+**As of 2026-03-05:**
+- **37/57 items complete (65%)** — P2, P7, P8 fully done; P1, P4, P6 in progress
+- Pi 5 running Debian Bookworm with HA (Docker), Tool Broker, Ollama, PipeWire, Dashboard
 - Tiered LLM: qwen2.5:1.5b (local, Pi) + llama3.1:8b (sidecar, Mac via Tailscale)
 - SonoBus built from source + PipeWire JACK shim audio routing
-- 194 tests passing, ~11,600 LOC Python
-- Dashboard with chat, tier badges, activity log deployed on Pi
+- Dashboard chat shows ALL LLM interactions regardless of origin (curl, Jarvis, API)
+- 5 systemd user units for service persistence + deploy/bootstrap.sh
+- 248 tests passing, ~12,900 LOC Python
+- Dashboard with chat, tier badges, source badges, activity log deployed on Pi
 
 **Open Decisions:** See `SOURCES/decisions_log.md`  
 **Detailed State:** See `SESSION_ARTIFACTS/current_state.md`

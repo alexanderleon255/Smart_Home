@@ -1,7 +1,7 @@
 # Smart Home – Current State
 
-**Last Updated:** 2026-03-04  
-**Rev:** 4.0 (Post codebase assessment, graceful tier failure system)
+**Last Updated:** 2026-03-05  
+**Rev:** 5.0 (Systemd deploy, diagnostic patterns, dashboard chat visibility)
 
 ---
 
@@ -24,6 +24,7 @@
 | Ollama (local) | :11434 | ✅ Running (qwen2.5:1.5b) |
 | Mosquitto MQTT | :1883 (Docker) | ✅ Running |
 | PipeWire | system service | ✅ Running (1.4.2 + WirePlumber 0.5.8) |
+| Dashboard | :8050 (Dash) | ✅ Running (chat with ALL-source visibility, tier badges, activity log) |
 | Tailscale | mesh VPN | ✅ Running |
 
 ## Services Running on Mac (Sidecar)
@@ -44,6 +45,8 @@
 - **Per-tier diagnostics:** TierDiagnostic dataclass with human-readable error messages
 - **Health endpoint:** `GET /v1/health` returns 3-state status (ok/degraded/llm_offline) with per-tier status+message
 - **Entity cache:** 48 Home Assistant entities validated
+- **Audit trail:** JSONL audit captures full response body (output_summary, tier, tool_calls) for /v1/process requests
+- **Dashboard chat:** Polls audit every 3s; injects ALL external LLM interactions (curl, Jarvis, API) into chat panel with orange source badges
 
 ---
 
@@ -65,15 +68,31 @@
 
 ---
 
+## Service Persistence (systemd)
+
+| Unit | Description |
+|------|-------------|
+| `ollama.service` | Local Ollama (qwen2.5:1.5b) |
+| `tool-broker.service` | FastAPI Tool Broker (uvicorn :8000) |
+| `dashboard.service` | Dash app (:8050) |
+| `jarvis-audio-devices.service` | PipeWire virtual sink/source |
+| `sonobus.service` | SonoBus headless audio bridge |
+
+- All units in `deploy/systemd/`, symlinked to `~/.config/systemd/user/`
+- Linger enabled (`loginctl enable-linger`) for boot persistence
+- Bootstrap script: `deploy/bootstrap.sh` for full Pi replication
+
+---
+
 ## Codebase Metrics
 
 | Metric | Value |
 |--------|-------|
-| Source LOC | 8,928 |
-| Test LOC | 3,481 |
-| Total LOC | 12,409 |
-| Total tests | 222 (all passing) |
-| Test time | ~35 seconds |
+| Source LOC | 9,518 |
+| Test LOC | 3,386 |
+| Total LOC | 12,904 |
+| Total tests | 248 (all passing) |
+| Test time | ~26 seconds |
 | Packages | 11 (tool_broker, jarvis, jarvis_audio, memory, secretary, dashboard, digests, patterns, cameras, satellites, tests) |
 
 ### Test Breakdown
@@ -82,6 +101,7 @@
 |-----------|-------|
 | test_tool_broker.py | 45 |
 | test_llm_tier_failures.py | 28 |
+| test_ha_diagnostics.py | 26 |
 | test_context_builder.py | 24 |
 | test_advanced_features.py | 22 |
 | test_batch_scheduler.py | 16 |
@@ -101,7 +121,7 @@
 | Phase | % | Key Achievement |
 |-------|---|-----------------|
 | P1 Hub Setup | 63% | Pi running with HA, Docker, MQTT, Tailscale |
-| P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard |
+| P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 33% | Tailscale mesh + PolicyGate + auth |
 | P5 Cameras | 0% | Hardware not acquired |
@@ -109,7 +129,7 @@
 | P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
 | P8 Advanced AI | 100%* | *Vector store has ID collision bug; context_builder has method call bug |
 
-**Overall: 35/55 items (64%)**
+**Overall: 37/57 items (65%)**
 
 ---
 
@@ -126,12 +146,17 @@
 
 ---
 
-## Recent Changes (2026-03-04)
+## Recent Changes (2026-03-05)
 
-1. **Graceful LLM tier failure handling** — TierStatus enum, TierDiagnostic, per-tier error messages, 3-state health (commit `f78f369`)
-2. **28 new tests** — `test_llm_tier_failures.py` covering all failure combinations
-3. **Full codebase assessment** — Letter-graded report at `AI_CONTEXT/SESSION_ARTIFACTS/REPORTS/2026-03-04_codebase_assessment.md`
-4. **Codebase assessment grade: B+** — Strong core, needs security hardening and bug fixes
+1. **Service persistence (P1-09)** — 5 systemd user units, deploy/bootstrap.sh, linger enabled (commit `44d8594`)
+2. **HADiagnostic + TierDiagnostic pattern** — Unified diagnostic dataclass across HA client, dashboard, Jarvis client, 26 new tests in test_ha_diagnostics.py (commit `44d8594`)
+3. **Dashboard chat visibility (P2-08)** — Audit middleware captures response body (output_summary, tier, tool_calls) for /v1/process; dashboard polls audit every 3s and injects ALL external interactions (curl, Jarvis, API) into chat panel with source badges (commit `12612cc`)
+4. **248 tests passing** — Up from 222 (26 new HA diagnostic tests)
+
+### Earlier changes (2026-03-04)
+5. **Graceful LLM tier failure handling** — TierStatus enum, TierDiagnostic, per-tier error messages, 3-state health (commit `f78f369`)
+6. **28 new tests** — `test_llm_tier_failures.py` covering all failure combinations
+7. **Full codebase assessment** — Letter-graded report at `AI_CONTEXT/SESSION_ARTIFACTS/REPORTS/2026-03-04_codebase_assessment.md`; grade B+
 
 ---
 
@@ -146,7 +171,7 @@
 ### Tier 2: Harden (Reliability / Ops)
 5. Add JSONL log rotation
 6. Persistent httpx.AsyncClient pooling
-7. systemd service units (broker, ollama, sonobus)
+7. ~~systemd service units~~ ✅ DONE (P1-09, deploy/systemd/)
 8. Tailscale ACLs
 9. Remove/disable unimplemented tools
 

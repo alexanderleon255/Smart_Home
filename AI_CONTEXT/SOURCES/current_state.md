@@ -1,7 +1,7 @@
 # Smart Home — Current State
 
 **Created:** 2026-03-02  
-**Last Updated:** 2026-03-04 (Rev 4.0 — Full codebase assessment, graceful tier failure system)  
+**Last Updated:** 2026-03-05 (Rev 5.0 — Systemd deploy, diagnostic patterns, dashboard chat visibility)  
 **Purpose:** What is installed, current phase, blockers, next actions
 
 ---
@@ -18,9 +18,10 @@
 | Component | Location / Port | Status | Notes |
 |-----------|----------------|--------|-------|
 | Home Assistant Core | :8123 (Docker) | ✅ Running | v2026.2.3, 48 entities |
-| Tool Broker (FastAPI) | :8000 (uvicorn) | ✅ Running | Tiered LLM, graceful failures |
+| Tool Broker (FastAPI) | :8000 (uvicorn) | ✅ Running | Tiered LLM, graceful failures, full audit trail |
 | Ollama (local) | :11434 | ✅ Running | qwen2.5:1.5b (lightweight) |
 | Mosquitto MQTT | :1883 (Docker) | ✅ Running | |
+| Dashboard (Dash) | :8050 | ✅ Running | Chat with ALL-source visibility, tier badges, activity log |
 | PipeWire | system service | ✅ Running | 1.4.2 + WirePlumber 0.5.8 |
 | Tailscale | mesh VPN | ✅ Running | 100.83.1.2 |
 | SonoBus | /usr/local/bin/sonobus | ✅ Installed | Built from source, ARM64, 25MB |
@@ -34,12 +35,27 @@
 | Ollama (sidecar) | :11434 (0.0.0.0) | ✅ Running | llama3.1:8b (complex reasoning) |
 | Docker Desktop | — | ✅ Installed | v29.2.1 |
 
-### Test Suite (222 tests, all passing)
+### Service Persistence (systemd user units)
+
+| Unit | Description |
+|------|-------------|
+| `ollama.service` | Local Ollama (qwen2.5:1.5b) |
+| `tool-broker.service` | FastAPI Tool Broker (uvicorn :8000) |
+| `dashboard.service` | Dash app (:8050) |
+| `jarvis-audio-devices.service` | PipeWire virtual sink/source |
+| `sonobus.service` | SonoBus headless audio bridge |
+
+- All units in `deploy/systemd/`, symlinked to `~/.config/systemd/user/`
+- Linger enabled for boot persistence
+- Bootstrap: `deploy/bootstrap.sh`
+
+### Test Suite (248 tests, all passing)
 
 | Test File | Count | Coverage Area |
 |-----------|-------|---------------|
 | `test_tool_broker.py` | 45 | Broker endpoints, auth, rate limiting, PolicyGate |
 | `test_llm_tier_failures.py` | 28 | Tier diagnostics, fallback routing, error messages |
+| `test_ha_diagnostics.py` | 26 | HA diagnostic pattern, dashboard/Jarvis propagation |
 | `test_context_builder.py` | 24 | 4-tier memory assembly, token budgets |
 | `test_advanced_features.py` | 22 | Vector store, patterns, cameras, satellites |
 | `test_batch_scheduler.py` | 16 | Job execution and scheduling |
@@ -56,13 +72,13 @@
 
 ## Current Phase
 
-**Active work:** Post-assessment hardening (fixing bugs and security issues identified in codebase assessment)  
-**Overall progress:** 35/55 items complete (64%)  
+**Active work:** Post-assessment hardening + operational polish  
+**Overall progress:** 37/57 items complete (65%)  
 **Phases 100% done:** P2 (AI Sidecar), P7* (Secretary — transcription is placeholder), P8* (Advanced AI — has bugs)  
-**Phases >50% done:** P1 (63%), P6 (80%)  
+**Phases >50% done:** P1 (67%), P6 (80%)  
 **Main blockers:** Zigbee hardware (P1-04), camera hardware (P5), live voice testing (P6-10)  
-**Total tests:** 222 passing (~35s)  
-**Total LOC:** 12,409 (8,928 source + 3,481 test)
+**Total tests:** 248 passing (~26s)  
+**Total LOC:** 12,904 (9,518 source + 3,386 test)
 
 ---
 
@@ -70,13 +86,13 @@
 
 | Metric | Value |
 |--------|-------|
-| Source LOC | 8,928 |
-| Test LOC | 3,481 |
-| Total LOC | 12,409 |
-| Total tests | 222 (all passing) |
-| Test time | ~35 seconds |
+| Source LOC | 9,518 |
+| Test LOC | 3,386 |
+| Total LOC | 12,904 |
+| Total tests | 248 (all passing) |
+| Test time | ~26 seconds |
 | Packages | 11 |
-| Python version | 3.12.2 (canonical) |
+| Python version | 3.13 (canonical) |
 
 ---
 
@@ -88,6 +104,8 @@
 - **Graceful failures:** TierStatus enum (7 states), per-tier diagnostic messages
 - **Health endpoint:** `GET /v1/health` returns `ok` / `degraded` / `llm_offline`
 - **Entity cache:** 48 Home Assistant entities validated
+- **Audit trail:** JSONL audit captures full response body for /v1/process (output_summary, tier, tool_calls, llm_error)
+- **Dashboard:** Polls audit every 3s; injects ALL external LLM interactions into chat with source badges
 
 ---
 
@@ -109,7 +127,7 @@
 | Phase | % | Key Achievement |
 |-------|---|-----------------|
 | P1 Hub Setup | 63% | Pi running with HA Docker, MQTT, Tailscale |
-| P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + 73 tests |
+| P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 33% | Tailscale mesh + PolicyGate + auth + rate limiting |
 | P5 Cameras | 0% | Hardware not acquired |
@@ -141,7 +159,7 @@
 ### Tier 2: Harden
 5. Add JSONL log rotation
 6. Persistent httpx.AsyncClient pooling
-7. systemd service units (broker, ollama, sonobus)
+7. ~~systemd service units~~ ✅ DONE (P1-09, deploy/systemd/)
 8. Tailscale ACLs
 9. Remove/disable unimplemented tools
 
