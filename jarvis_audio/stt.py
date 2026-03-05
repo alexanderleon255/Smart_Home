@@ -5,14 +5,25 @@ import os
 from pathlib import Path
 from typing import Optional, Generator
 
+# Resolve platform-aware defaults
+_HOME = Path.home()
+_DEFAULT_WHISPER_BIN = os.environ.get(
+    "WHISPER_CPP_PATH",
+    str(_HOME / "whisper.cpp" / "build" / "bin" / "whisper-cli"),
+)
+_DEFAULT_WHISPER_MODEL = os.environ.get(
+    "WHISPER_MODEL_PATH",
+    str(_HOME / "whisper.cpp" / "models" / "ggml-base.en.bin"),
+)
+
 
 class WhisperSTT:
     """Speech-to-text transcription using whisper.cpp."""
     
     def __init__(
         self,
-        model_path: str = "models/ggml-small.bin",
-        whisper_cpp_path: str = "whisper.cpp/main",
+        model_path: str = _DEFAULT_WHISPER_MODEL,
+        whisper_cpp_path: str = _DEFAULT_WHISPER_BIN,
         streaming: bool = True,
     ):
         """Initialize Whisper STT.

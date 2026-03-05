@@ -1,10 +1,8 @@
 # Smart Home Progress Tracker
 
 **Created:** 2026-03-02  
-**Last Updated:** 2026-03-02  
-**Status:** Active (Rev 3.0 — Post P1/P1.5/P2 Closure)
-
-> **Rev 2.0:** Added P6 (Jarvis), P7 (Secretary), P8 (Advanced AI) phases
+**Last Updated:** 2026-03-04  
+**Status:** Active (Rev 4.0 -- Post Pi migration, audio pipeline, SonoBus)
 
 ---
 
@@ -12,48 +10,58 @@
 
 | Phase | Name | Items | Complete | Status |
 |-------|------|-------|----------|--------|
-| P1 | Hub Setup | 8 | 0 | 🔴 0% |
-| P2 | AI Sidecar | 7 | 6 | 🟢 86% |
+| P1 | Hub Setup | 8 | 5 | 🟢 63% |
+| P2 | AI Sidecar | 7 | 7 | 🟢 100% |
 | P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
-| P4 | Security Hardening | 6 | 1 | 🟡 17% |
+| P4 | Security Hardening | 6 | 2 | 🟡 33% |
 | P5 | Camera Integration | 5 | 0 | 🔴 0% |
-| P6 | Jarvis Real-Time Voice | 10 | 5 | 🟡 50% |
+| P6 | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
-| **TOTAL** | | **55** | **25** | **🟡 45%** |
+| **TOTAL** | | **55** | **35** | **🟢 64%** |
+
+**Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
+**Tests:** 194 passing (pytest, ~25s)  
+**Code:** ~11,600 LOC across 11 packages  
+**Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi
 
 ---
 
-## Phase 1: Hub Setup (0/8 = 0%)
+## Phase 1: Hub Setup (5/8 = 63%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P1-01 | Hardware Assembly | ⬜ NOT STARTED | - | |
-| P1-02 | Home Assistant OS Installation | ⬜ NOT STARTED | - | |
-| P1-03 | Network Configuration | ⬜ NOT STARTED | - | |
+| P1-01 | Hardware Assembly | ✅ COMPLETE | 2026-03-03 | Pi 5 8GB running Debian Bookworm |
+| P1-02 | Home Assistant OS Installation | ✅ COMPLETE | 2026-03-03 | HA Core via Docker on Pi (not HAOS) |
+| P1-03 | Network Configuration | ✅ COMPLETE | 2026-03-03 | Static IP, Tailscale 100.83.1.2 |
 | P1-04 | Zigbee Coordinator Setup | ⬜ NOT STARTED | - | Hardware TBD |
 | P1-05 | Z-Wave Coordinator Setup | ⬜ NOT STARTED | - | OPTIONAL |
-| P1-06 | MQTT Broker Setup | ⬜ NOT STARTED | - | |
-| P1-07 | Basic Automation Test | ⬜ NOT STARTED | - | |
+| P1-06 | MQTT Broker Setup | ✅ COMPLETE | 2026-03-03 | Mosquitto via Docker |
+| P1-07 | Basic Automation Test | ✅ COMPLETE | 2026-03-04 | TV on/off via HA service calls working |
 | P1-08 | Backup Configuration | ⬜ NOT STARTED | - | |
 
-**Phase 1 Blockers:** Hardware not yet acquired (Pi 5, NVMe, Zigbee dongle)
+**Phase 1 Notes:** Pi 5 running Debian Bookworm (not Home Assistant OS). HA Core runs in Docker. Migration from HAOS to Debian was necessary to support Tool Broker, Ollama, and audio pipeline natively on the Pi.
 
 ---
 
-## Phase 2: AI Sidecar (6/7 = 86%)
+## Phase 2: AI Sidecar (7/7 = 100%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P2-01 | Ollama Installation | ✅ COMPLETE | 2026-03-02 | via Homebrew |
-| P2-02 | LLM Model Pull | ✅ COMPLETE | 2026-03-02 | Llama 3.1 8B (4.9GB) |
+| P2-01 | Ollama Installation | ✅ COMPLETE | 2026-03-02 | On Mac initially, now also on Pi (qwen2.5:1.5b) |
+| P2-02 | LLM Model Pull | ✅ COMPLETE | 2026-03-02 | Mac: llama3.1:8b; Pi: qwen2.5:1.5b |
 | P2-03 | Tool Broker API Design | ✅ COMPLETE | 2026-03-02 | schemas.py + OpenAPI endpoints |
-| P2-04 | Tool Broker Implementation | ✅ COMPLETE | 2026-03-02 | main.py with /health, /tools, /v1/process, /v1/execute; 37 tests |
+| P2-04 | Tool Broker Implementation | ✅ COMPLETE | 2026-03-02 | main.py with all endpoints; 45 tests |
 | P2-05 | Home Assistant API Integration | ✅ COMPLETE | 2026-03-02 | ha_client.py with async service calls |
-| P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation in broker |
-| P2-07 | End-to-End Test | ⬜ NOT STARTED | - | Blocked: needs live HA instance |
+| P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation; 46 entities cached |
+| P2-07 | End-to-End Test | ✅ COMPLETE | 2026-03-04 | Live HA + Ollama + Tool Broker verified on Pi |
 
-**Phase 2 Status:** 🟢 86% — All software complete. E2E test blocked by P1 hardware.
+**Phase 2 Status:** ✅ **COMPLETE**
+- Tool Broker migrated from Mac to Pi (runs at localhost:8000)
+- Tiered LLM: local qwen2.5:1.5b (fast, simple) + sidecar llama3.1:8b on Mac (complex queries)
+- Dashboard with chat, activity log, tier badges deployed
+- 46 HA entities in validator cache
+- E2E verified: text -> LLM -> tool call -> HA execution -> response
 
 ---
 
@@ -61,31 +69,29 @@
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P3-01 | Voice Pipeline Add-ons | ⬜ NOT STARTED | - | |
+| P3-01 | Voice Pipeline Add-ons | ⬜ NOT STARTED | - | Superseded by P6 (Mac/Pi Jarvis) |
 | P3-02 | Wake Word Configuration | ⬜ NOT STARTED | - | |
 | P3-03 | Speech-to-Text Setup | ⬜ NOT STARTED | - | |
 | P3-04 | Text-to-Speech Setup | ⬜ NOT STARTED | - | |
-| P3-05 | Voice-to-Tool-Broker Integration | ⬜ NOT STARTED | - | ~4h effort |
+| P3-05 | Voice-to-Tool-Broker Integration | ⬜ NOT STARTED | - | |
 | P3-06 | Voice Command Testing | ⬜ NOT STARTED | - | |
 
-**Phase 3 Blockers:** Depends on P1 and P2-04
-
-> **Note:** P3 is Pi-based voice pipeline. For Mac-based Jarvis voice, see P6.
+**Phase 3 Notes:** P3 is the HA-native voice pipeline (Assist). Largely superseded by P6 (Jarvis voice with whisper.cpp + Piper TTS running natively on Pi). May be revisited for HA Assist integration as a fallback path.
 
 ---
 
-## Phase 4: Security Hardening (1/6 = 17%)
+## Phase 4: Security Hardening (2/6 = 33%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P4-01 | Tailscale Installation & Configuration | ⬜ NOT STARTED | - | Needs deployment hardware |
+| P4-01 | Tailscale Installation & Configuration | ✅ COMPLETE | 2026-03-03 | Pi=100.83.1.2, Mac=100.98.1.21, iPhone=100.83.74.23 |
 | P4-02 | Tailscale ACLs | ⬜ NOT STARTED | - | |
 | P4-03 | Local Firewall Configuration | ⬜ NOT STARTED | - | |
 | P4-04 | Credential Rotation & Storage | ✅ COMPLETE | 2026-03-02 | API-key auth, CORS allowlist, rate limiting, PolicyGate |
 | P4-05 | Logging & Monitoring Setup | ⬜ NOT STARTED | - | |
 | P4-06 | Security Audit | ⬜ NOT STARTED | - | |
 
-**Phase 4 Status:** 🟡 17% — Software-level security complete (auth, rate limiting, PolicyGate, CORS). Network-level security (Tailscale, firewall) blocked by P1.
+**Phase 4 Status:** 🟡 33% -- Tailscale mesh fully operational (Pi, Mac, iPhone, iPad). Software-level security (auth, PolicyGate, CORS) complete. ACLs and firewall pending.
 
 ---
 
@@ -99,26 +105,35 @@
 | P5-04 | Motion Detection & Recording | ⬜ NOT STARTED | - | |
 | P5-05 | Camera Security Hardening | ⬜ NOT STARTED | - | |
 
-**Phase 5 Blockers:** Depends on P1 and P4
+**Phase 5 Blockers:** Camera hardware not acquired.
 
 ---
 
-## Phase 6: Jarvis Real-Time Voice (5/10 = 50%)
+## Phase 6: Jarvis Real-Time Voice (8/10 = 80%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P6-01 | Audio Bridge Setup (SonoBus) | ⬜ NOT STARTED | - | Needs physical audio setup |
-| P6-02 | BlackHole Audio Routing | ⬜ NOT STARTED | - | |
-| P6-03 | Recording Pipeline (ffmpeg) | ⬜ NOT STARTED | - | |
+| P6-01 | Audio Bridge Setup (SonoBus) | ✅ COMPLETE | 2026-03-04 | Built from source on ARM64; PipeWire JACK shim routing |
+| P6-02 | Virtual Audio Routing | ✅ COMPLETE | 2026-03-04 | PipeWire virtual devices (jarvis-tts-sink, jarvis-mic-source) replace BlackHole |
+| P6-03 | Recording Pipeline (ffmpeg) | ✅ COMPLETE | 2026-03-04 | ffmpeg/ffplay installed; recording from virtual sink monitor |
 | P6-04 | Wake Word Detection | ✅ COMPLETE | 2026-03-02 | wake_word_detector.py with openWakeWord |
-| P6-05 | Streaming STT (whisper.cpp) | ✅ COMPLETE | 2026-03-02 | stt_client.py with polling + normalized chunks |
-| P6-06 | Streaming TTS (Piper) | ✅ COMPLETE | 2026-03-02 | tts_controller.py |
+| P6-05 | Streaming STT (whisper.cpp) | ✅ COMPLETE | 2026-03-04 | Built from source; stt_client.py reads from jarvis-mic-source |
+| P6-06 | Streaming TTS (Piper) | ✅ COMPLETE | 2026-03-04 | Piper installed; tts_controller.py routes to jarvis-tts-sink |
 | P6-07 | Jarvis Modelfile Creation | ⬜ NOT STARTED | - | |
 | P6-08 | Barge-In Implementation | ✅ COMPLETE | 2026-03-02 | barge_in.py module |
 | P6-09 | Voice Loop Integration | ✅ COMPLETE | 2026-03-02 | voice_loop.py state machine + latency instrumentation |
-| P6-10 | Jarvis Voice Testing | ⬜ NOT STARTED | - | Needs live audio pipeline |
+| P6-10 | Jarvis Voice Testing | ⬜ NOT STARTED | - | Needs live SonoBus peer (iPhone app) |
 
-**Phase 6 Status:** 🟡 50% — Core software modules done. Audio bridge + physical setup pending.
+**Phase 6 Status:** 🟢 80%
+- SonoBus built from source for aarch64 (25MB binary at /usr/local/bin/sonobus)
+- PipeWire replaces BlackHole (macOS-only) with virtual audio devices
+- SonoBus -> PipeWire routing via LD_LIBRARY_PATH JACK shim (key discovery)
+- whisper.cpp built from source at ~/whisper.cpp/build/bin/whisper-cli
+- Piper TTS installed at ~/.local/piper/piper/piper
+- All code updated for Linux (pulse audio format, correct binary paths, env-driven config)
+- Launch script: jarvis_audio/scripts/launch_jarvis_audio.sh
+- Wiring script: jarvis_audio/scripts/wire_sonobus.sh (handles HDMI disconnect)
+- Remaining: Jarvis Modelfile + live voice testing with iPhone SonoBus app
 
 ---
 
@@ -134,7 +149,7 @@
 | P7-06 | Session Archival System | ✅ COMPLETE | 2026-03-02 | Directory structure, indexing, retention policy |
 | P7-07 | Automation Hook Detection | ✅ COMPLETE | 2026-03-02 | Trigger phrase detection and actionable item generation |
 
-**Phase 7 Status:** ✅ **COMPLETE** - All 7 items implemented. Integration with real whisper.cpp binary pending.
+**Phase 7 Status:** ✅ **COMPLETE**
 
 ---
 
@@ -149,7 +164,7 @@
 | P8-05 | AI Camera Inference | ✅ COMPLETE | 2026-03-02 | camera processor module |
 | P8-06 | Behavioral Pattern Detection | ✅ COMPLETE | 2026-03-02 | behavioral learner module |
 
-**Phase 8 Status:** ✅ **COMPLETE** — All 6 modules implemented with test coverage in test_advanced_features.py.
+**Phase 8 Status:** ✅ **COMPLETE**
 
 ---
 
@@ -159,10 +174,10 @@
 |-------------|-------|---------|--------|---------|
 | DEC-001 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | ⬜ PENDING | - |
 | DEC-002 | Z-Wave Dongle | Zooz ZST10, Aeotec Z-Stick | ⬜ PENDING | - |
-| DEC-003 | Primary LLM | Llama 3.1 8B | ✅ DECIDED | Llama 3.1 8B |
+| DEC-003 | Primary LLM | Tiered: qwen2.5:1.5b (local) + llama3.1:8b (sidecar) | ✅ DECIDED | Tiered |
 | DEC-004 | Web Search | Local SearXNG, DuckDuckGo API | ⬜ PENDING | - |
 | DEC-005 | Camera Model | Reolink, Amcrest, Ubiquiti | ⬜ PENDING | - |
-| DEC-006 | Whisper Model Size | tiny, small, medium | ⬜ PENDING | - |
+| DEC-006 | Whisper Model Size | base.en (current) | ✅ DECIDED | base.en |
 | DEC-007 | Vector Database | ChromaDB, manual embeddings | ⬜ PENDING | - |
 
 ---
@@ -174,8 +189,14 @@
 | 2026-03-02 | Initial setup | - | Created vision, roadmap, checklists |
 | 2026-03-02 | AI Context expansion | P2-01, P2-02 | Ollama + Llama 3.1 8B installed; LLM_RUNTIME files created |
 | 2026-03-02 | Vision Rev 2.0 | - | Added Jarvis + Autonomous Secretary phases from specs |
-| 2026-03-02 | P1/P1.5/P2 closure | P2-03..06, P4-04, P6-04..09, P8-01..06 | Tool Broker hardened (37 tests), 4-layer memory, PolicyGate, voice modules, P7+P8 wave 2 |
-| 2026-03-02 | Gap assessment Rev 2 | - | Audited all docs vs code; synced tool_definitions.json + few_shot_examples.json to broker schema |
+| 2026-03-02 | P1/P1.5/P2 closure | P2-03..06, P4-04, P6-04..09, P8-01..06 | Tool Broker hardened (37 tests), 4-layer memory, PolicyGate, voice modules, P7+P8 |
+| 2026-03-02 | Gap assessment Rev 2 | - | Audited all docs vs code; synced tool_definitions.json + few_shot_examples.json |
+| 2026-03-03 | Infrastructure deploy | P1-01..03, P1-06, P4-01 | Pi 5 running Debian, HA Docker, MQTT, Tailscale mesh |
+| 2026-03-03 | Pi migration | P2-07 | Tool Broker migrated to Pi, tiered LLM (local+sidecar), dashboard deployed |
+| 2026-03-04 | Dashboard + audio | - | Chat auto-execute, tier badges, TV control verified |
+| 2026-03-04 | Audio pipeline install | P6-05, P6-06 | whisper.cpp built, Piper installed, PyAudio, openWakeWord on Pi |
+| 2026-03-04 | Linux audio migration | P6-02, P6-03 | All 6 audio files updated macOS->Linux; PipeWire virtual devices |
+| 2026-03-04 | SonoBus + wiring | P6-01 | SonoBus built from source ARM64, PipeWire JACK shim, wire scripts |
 
 ---
 

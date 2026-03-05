@@ -56,17 +56,53 @@
 **New architecture:** `{"text": "...", "tool_calls": [...]}` — conversation-first, tools-when-needed.  
 **Non-negotiable:** Yes — the LLM must always produce conversational output.
 
+### DEC-009: Tiered LLM Architecture (Local + Sidecar)
+**Decided:** 2026-03-03  
+**Decision:** Run two LLM tiers: a lightweight local model on the Pi (qwen2.5:1.5b) for fast simple queries, and a sidecar model on the Mac (llama3.1:8b) for complex queries requiring deeper reasoning.  
+**Rationale:** Pi 5 can run a 1.5B model locally with sub-second latency for weather, time, simple commands. Complex queries route over Tailscale to the Mac's llama3.1:8b. Auto-routing based on query complexity keywords.  
+**Tier config:** `local` = Pi Ollama (qwen2.5:1.5b), `sidecar` = Mac Ollama (llama3.1:8b), `routing_mode` = auto.  
+**Supersedes:** DEC-003 (which assumed single LLM on Mac only).
+
+### DEC-010: Tool Broker Migration to Pi
+**Decided:** 2026-03-03  
+**Decision:** Run Tool Broker (FastAPI) directly on the Raspberry Pi 5 instead of on the MacBook Air.  
+**Rationale:** Co-locating Tool Broker with Home Assistant on the Pi eliminates a network hop for every HA service call, reduces latency, and makes the Pi a self-contained automation hub. The Mac becomes optional sidecar compute (LLM only), not a required gateway.  
+**Impact:** Mac can sleep/be absent and Pi still handles simple queries via local Ollama. Dashboard also runs on Pi.
+
+### DEC-011: PipeWire Virtual Devices over BlackHole
+**Decided:** 2026-03-04  
+**Decision:** Use PipeWire virtual audio devices (jarvis-tts-sink, jarvis-mic-source) instead of BlackHole for audio routing.  
+**Rationale:** BlackHole is macOS-only. Pi runs Linux with PipeWire 1.4.2. Virtual devices created via `pactl load-module module-null-sink` and `module-virtual-source` provide the same functionality natively.  
+**Configuration:** jarvis-tts-sink at 22050Hz (TTS output), jarvis-mic-source at 16000Hz (mic capture).
+
+### DEC-012: SonoBus with PipeWire JACK Shim
+**Decided:** 2026-03-04  
+**Decision:** SonoBus runs headless on Pi using PipeWire's JACK compatibility shim for audio routing.  
+**Rationale:** SonoBus (JUCE app) `dlopen()`s libjack at runtime. Setting `LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/pipewire-0.3/jack` makes SonoBus use PipeWire's JACK implementation, appearing as PipeWire nodes. This avoids needing a real JACK server.  
+**Key discovery:** `ldd sonobus` shows no libjack linkage (dynamic loading). `pw-jack` wrapper doesn't work reliably; `LD_LIBRARY_PATH` is the correct approach.
+
+### DEC-013: whisper.cpp base.en Model
+**Decided:** 2026-03-04  
+**Decision:** Use whisper.cpp with the `base.en` model for speech-to-text on Pi.  
+**Rationale:** base.en (141MB) provides good accuracy for English-only use case. small (466MB) too slow for real-time on Pi. tiny (77MB) too inaccurate. base.en is the sweet spot for Pi 5 performance.  
+**Resolves:** DEC-P05 (Whisper Model Size).
+
+### DEC-014: Debian Bookworm over Home Assistant OS
+**Decided:** 2026-03-03  
+**Decision:** Run Debian Bookworm on the Pi 5 with HA Core in Docker, instead of Home Assistant OS.  
+**Rationale:** HAOS is an appliance OS that restricts package installation. Running Ollama, whisper.cpp, Piper TTS, SonoBus, PipeWire, and Tool Broker natively on the Pi requires a full Linux OS. Debian Bookworm provides package management, systemd services, and full control.  
+**Trade-off:** Lose HAOS add-on ecosystem and one-click updates. Gain full Linux control.
+
 ---
 
 ## Pending Decisions
 
 | ID | Topic | Options | Status |
 |----|-------|---------|--------|
-| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | PENDING (blocked by P1 hardware) |
+| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | PENDING (blocked by hardware purchase) |
 | DEC-P02 | Z-Wave Dongle | Zooz ZST10, Aeotec Z-Stick | PENDING |
 | DEC-P03 | Web Search Backend | Local SearXNG, DuckDuckGo API | PENDING |
 | DEC-P04 | Camera Hardware | Reolink, Amcrest, Ubiquiti | PENDING |
-| DEC-P05 | Whisper Model Size | tiny, base, small | PENDING |
 | DEC-P06 | Vector Database | ChromaDB, manual embeddings | PENDING |
 
 ---
@@ -84,6 +120,14 @@
 ### REJ-003: Wildcard CORS
 **Rejected:** 2026-03-02  
 **Reason:** Security risk. Any browser tab could make requests to broker.
+
+### REJ-004: Home Assistant OS (HAOS) on Pi
+**Rejected:** 2026-03-03  
+**Reason:** HAOS is an appliance OS that restricts native package installation. Cannot run Ollama, whisper.cpp, Piper, SonoBus, or PipeWire natively. See DEC-014.
+
+### REJ-005: pw-jack Wrapper for SonoBus
+**Rejected:** 2026-03-04  
+**Reason:** `pw-jack sonobus --headless` does not reliably intercept dlopen() calls from JUCE. LD_LIBRARY_PATH pointing to PipeWire's JACK shim directory works correctly. See DEC-012.
 
 ---
 

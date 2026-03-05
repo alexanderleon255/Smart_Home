@@ -2,6 +2,7 @@
 """Adapter for Whisper STT from jarvis_audio."""
 
 import sys
+import os
 from pathlib import Path
 import tempfile
 import subprocess
@@ -10,11 +11,17 @@ import threading
 from datetime import datetime, timezone
 from typing import Callable, Dict, Any, List, Optional
 
+# Platform-aware ffmpeg input format
+_IS_LINUX = sys.platform.startswith("linux")
+_AUDIO_FMT = "pulse" if _IS_LINUX else "avfoundation"
+# On Linux, read from the Jarvis virtual mic (AirPods via SonoBus)
+_AUDIO_DEV = os.environ.get("JARVIS_MIC_DEVICE", "jarvis-mic-source") if _IS_LINUX else ":0"
+
 
 class WhisperSTT:
     """Wrapper around jarvis_audio.stt.WhisperSTT with streaming support."""
     
-    def __init__(self, model_path: str = "models/ggml-small.bin"):
+    def __init__(self, model_path: str = ""):
         """Initialize Whisper STT.
         
         Args:
@@ -24,7 +31,11 @@ class WhisperSTT:
         sys.path.insert(0, str(Path(__file__).parent.parent / "jarvis_audio"))
         from stt import WhisperSTT as _WhisperSTT
         
-        self._stt = _WhisperSTT(model_path=model_path)
+        # Use jarvis_audio defaults when no explicit path given
+        kwargs = {}
+        if model_path:
+            kwargs["model_path"] = model_path
+        self._stt = _WhisperSTT(**kwargs)
         self.transcript = ""
         self._recording_process = None
         self._temp_file = None
@@ -48,13 +59,12 @@ class WhisperSTT:
         self._temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         self._temp_file.close()
         
-        # Start recording
-        # Using ffmpeg to record from default microphone
+        # Start recording from default microphone (platform-aware)
         self._recording_process = subprocess.Popen(
             [
                 'ffmpeg',
-                '-f', 'avfoundation',  # macOS audio input
-                '-i', ':0',  # Default mic
+                '-f', _AUDIO_FMT,
+                '-i', _AUDIO_DEV,
                 '-ar', '16000',  # 16kHz sample rate
                 '-ac', '1',  # Mono
                 '-y',  # Overwrite

@@ -95,12 +95,25 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("HA token not configured - entity validation disabled")
     
-    # Check Ollama
-    if await llm_client.check_health():
-        logger.info(f"Ollama connected: {llm_client.model}")
-    else:
-        logger.warning(f"Ollama not available at {llm_client.base_url}")
+    # Check Ollama tiers
+    tier_health = await llm_client.check_health_detailed()
+    local_status = tier_health["local"]
+    sidecar_status = tier_health["sidecar"]
     
+    if local_status["connected"]:
+        logger.info(f"Local LLM connected: {local_status['model']}@{local_status['url']}")
+    else:
+        logger.warning(f"Local LLM not available at {local_status['url']}")
+    
+    if sidecar_status["url"]:
+        if sidecar_status["connected"]:
+            logger.info(f"Sidecar LLM connected: {sidecar_status['model']}@{sidecar_status['url']}")
+        else:
+            logger.warning(f"Sidecar LLM not available at {sidecar_status['url']}")
+    else:
+        logger.info("Sidecar LLM: not configured (local-only mode)")
+    
+    logger.info(f"LLM routing mode: {tier_health['routing_mode']}")
     logger.info("Tool Broker ready")
     
     yield
@@ -227,10 +240,13 @@ async def health():
     """
     Health check endpoint.
     
-    Returns connectivity status for Ollama and Home Assistant.
+    Returns connectivity status for Ollama tiers and Home Assistant.
     """
     ollama_ok = await llm_client.check_health()
     ha_ok = await ha_client.check_health() if ha_client.is_configured else False
+    
+    # Detailed tier info
+    tier_info = await llm_client.check_health_detailed()
     
     status = "ok" if ollama_ok else "degraded"
     if not ha_ok and ha_client.is_configured:
@@ -238,10 +254,11 @@ async def health():
     
     return HealthResponse(
         status=status,
-        model=llm_client.model,
+        model=llm_client.local_model,
         ollama_connected=ollama_ok,
         ha_connected=ha_ok,
         entity_cache_size=entity_validator.cache_size,
+        llm_tiers=tier_info,
     )
 
 
@@ -338,13 +355,15 @@ async def process(
             text += f" (Note: some actions couldn't be validated: {'; '.join(validation_errors)})"
         
         elapsed = int((time.time() - start_time) * 1000)
-        logger.info(f"Processed in {elapsed}ms: {len(validated_calls)} tool calls, confirmation={'yes' if needs_confirmation else 'no'}")
+        tier_label = getattr(conv, 'tier', None) or 'unknown'
+        logger.info(f"Processed in {elapsed}ms via {tier_label}: {len(validated_calls)} tool calls, confirmation={'yes' if needs_confirmation else 'no'}")
         
         return ProcessResponse(
             text=text,
             tool_calls=validated_calls,
             tool_results=[],
             requires_confirmation=needs_confirmation,
+            tier=tier_label,
         )
         
     except ValueError as e:

@@ -20,9 +20,20 @@ def _parse_cors_origins() -> List[str]:
 class Config:
     """Tool Broker configuration."""
     
-    # Ollama settings
+    # Ollama settings — tiered LLM routing
+    # Primary: lightweight model on Pi (always-on, handles simple requests)
     ollama_url: str = field(default_factory=lambda: os.getenv("OLLAMA_URL", "http://localhost:11434"))
-    ollama_model: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "llama3.1:8b"))
+    ollama_model: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b"))
+    
+    # Sidecar: heavier model on Mac (complex reasoning, may be offline)
+    ollama_sidecar_url: str = field(default_factory=lambda: os.getenv("OLLAMA_SIDECAR_URL", ""))
+    ollama_sidecar_model: str = field(default_factory=lambda: os.getenv("OLLAMA_SIDECAR_MODEL", "llama3.1:8b"))
+    
+    # Tiered routing: "auto" | "local" | "sidecar"
+    # auto = classify request complexity and route accordingly
+    # local = always use local model
+    # sidecar = always prefer sidecar (fallback to local if unavailable)
+    llm_routing_mode: str = field(default_factory=lambda: os.getenv("LLM_ROUTING_MODE", "auto"))
     
     # Home Assistant settings
     ha_url: str = field(default_factory=lambda: os.getenv("HA_URL", "http://homeassistant.local:8123"))

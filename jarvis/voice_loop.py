@@ -28,7 +28,7 @@ class VoiceLoop:
     
     def __init__(
         self,
-        model_path: str = "./whisper.cpp/models/ggml-small.en.bin",
+        model_path: str = "",
         chime_path: Optional[str] = None,
         silence_timeout: float = 2.0,
         max_utterance_seconds: float = 12.0,
@@ -228,11 +228,15 @@ class VoiceLoop:
         self.state = new_state
         
     def _play_chime(self):
-        """Play activation sound."""
+        """Play activation sound (cross-platform)."""
+        import sys as _sys
         try:
-            # Try afplay (macOS)
+            if _sys.platform == "darwin":
+                cmd = ['afplay', self.chime_path]
+            else:
+                cmd = ['ffplay', '-nodisp', '-autoexit', self.chime_path]
             subprocess.run(
-                ['afplay', self.chime_path],
+                cmd,
                 check=True,
                 timeout=2.0,
                 stdout=subprocess.DEVNULL,
@@ -250,8 +254,8 @@ def main():
     parser = argparse.ArgumentParser(description="Jarvis Voice Assistant")
     parser.add_argument(
         "--model",
-        default="./whisper.cpp/models/ggml-small.en.bin",
-        help="Path to Whisper model"
+        default="",
+        help="Path to Whisper model (auto-detected if empty)"
     )
     parser.add_argument(
         "--chime",

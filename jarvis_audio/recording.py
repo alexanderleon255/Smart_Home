@@ -2,20 +2,28 @@
 
 import subprocess
 import signal
+import sys
 import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
+# Platform-aware defaults
+_IS_LINUX = sys.platform.startswith("linux")
+_DEFAULT_FORMAT = "pulse" if _IS_LINUX else "avfoundation"
+# On Linux, record from the TTS sink's monitor (captures both sides for archival)
+_DEFAULT_DEVICE = os.environ.get("JARVIS_RECORD_DEVICE", "jarvis-tts-sink.monitor") if _IS_LINUX else "BlackHole 2ch"
+
 
 class AudioRecorder:
-    """Records audio using ffmpeg with BlackHole virtual device."""
+    """Records audio using ffmpeg (PulseAudio on Linux, avfoundation on macOS)."""
     
     def __init__(
         self,
         output_dir: str = "./sessions",
         sample_rate: int = 16000,
-        audio_device: str = "BlackHole 2ch",
+        audio_device: str = _DEFAULT_DEVICE,
+        audio_format: str = _DEFAULT_FORMAT,
     ):
         """Initialize audio recorder.
         
@@ -23,10 +31,12 @@ class AudioRecorder:
             output_dir: Directory to save recordings
             sample_rate: Recording sample rate (Hz)
             audio_device: Audio input device name
+            audio_format: ffmpeg input format (pulse, alsa, avfoundation)
         """
         self.output_dir = Path(output_dir)
         self.sample_rate = sample_rate
         self.audio_device = audio_device
+        self.audio_format = audio_format
         self.process: Optional[subprocess.Popen] = None
         
         # Create output directory
@@ -51,13 +61,18 @@ class AudioRecorder:
         else:
             output_file = Path(output_file)
         
-        # ffmpeg command for macOS with BlackHole
+        # Build ffmpeg input args based on platform
+        if self.audio_format == "avfoundation":
+            input_args = ["-f", "avfoundation", "-i", f":{self.audio_device}"]
+        else:
+            # pulse / alsa on Linux
+            input_args = ["-f", self.audio_format, "-i", self.audio_device]
+
         cmd = [
             "ffmpeg",
-            "-f", "avfoundation",
-            "-i", f":{self.audio_device}",  # Audio only from BlackHole
+            *input_args,
             "-ar", str(self.sample_rate),
-            "-ac", "2",  # Stereo
+            "-ac", "1",  # Mono (matches whisper.cpp expectations)
             "-y",  # Overwrite output file
             str(output_file),
         ]

@@ -67,6 +67,10 @@ class ConversationalResponse(BaseModel):
         default_factory=list,
         description="Optional tool calls to execute (empty for pure conversation)"
     )
+    tier: Optional[str] = Field(
+        default=None,
+        description="Which LLM tier handled this request: 'local' or 'sidecar'"
+    )
 
 
 # --- Legacy types kept for backward compatibility with /v1/execute ---
@@ -129,6 +133,10 @@ class ProcessResponse(BaseModel):
         default=False,
         description="True if any tool call requires user confirmation before execution"
     )
+    tier: Optional[str] = Field(
+        default=None,
+        description="Which LLM tier handled this request: 'local' or 'sidecar'"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -143,10 +151,14 @@ class ErrorResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Response for GET /v1/health."""
     status: str = Field(..., description="ok or degraded")
-    model: str = Field(..., description="LLM model name")
-    ollama_connected: bool = Field(..., description="Ollama connectivity status")
+    model: str = Field(..., description="Primary LLM model name")
+    ollama_connected: bool = Field(..., description="At least one Ollama tier connected")
     ha_connected: bool = Field(..., description="Home Assistant connectivity status")
     entity_cache_size: int = Field(default=0, description="Number of cached entities")
+    llm_tiers: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Detailed status of local and sidecar LLM tiers"
+    )
 
 
 class ToolDefinition(BaseModel):

@@ -9,13 +9,13 @@
 ## 1. Project Overview
 
 **Smart Home** is a local-first home automation platform with separated compute:
-- **Raspberry Pi 5** → Deterministic automation hub (Home Assistant)
-- **MacBook Air M1** → AI sidecar (Ollama + Tool Broker)
+- **Raspberry Pi 5** → Primary hub: Home Assistant, Tool Broker, Ollama (local), PipeWire audio, Jarvis voice
+- **MacBook Air M1** → AI sidecar (Ollama llama3.1:8b for complex queries only)
 - **Tailscale** → Secure mesh VPN (no public ports)
 
 ### Architecture Principle
 ```
-LLM proposes → Tool Broker validates → Home Assistant executes
+User Voice/Text → Tool Broker (Pi) → Tiered LLM → Validated Tool Call → Home Assistant (Pi)
 ```
 
 The LLM is a **router**, not an **actuator**. It outputs structured JSON tool calls that Home Assistant validates and executes. No arbitrary shell access. Web content is untrusted.
@@ -27,26 +27,27 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 | Document | Purpose | Load When |
 |----------|---------|-----------|
 | `SOURCES/vision_document.md` | Strategic vision, architecture overview | Always first |
-| `ROADMAPS/2026-03-02_smart_home_master_roadmap.md` | Implementation milestones | Planning sessions |
-| `PROGRESS_TRACKERS/smart_home_progress_tracker.md` | Current status | Every session |
-| `CHECKLISTS/phase*_checklist.md` | Detailed task lists | Implementing specific phase |
+| `SESSION_ARTIFACTS/current_state.md` | Live platform state | Every session |
+| `SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md` | Phase completion tracking | Every session |
+| `SESSION_ARTIFACTS/ROADMAPS/2026-03-02_smart_home_master_roadmap.md` | Implementation milestones | Planning sessions |
+| `SOURCES/decisions_log.md` | Locked decisions + rationale | Architecture decisions |
+| `SESSION_ARTIFACTS/CHECKLISTS/phase*_checklist.md` | Detailed task lists | Implementing specific phase |
 | `References/Smart_Home_Threat_Model*.md` | Security analysis | Security-related work |
 
 ---
 
 ## 3. Current State
 
-**As of 2026-03-02:**
-- All phases NOT STARTED (0/32 items complete)
-- Hardware not yet acquired
-- Documentation structure established
+**As of 2026-03-04:**
+- **35/55 items complete (64%)** — P2, P7, P8 fully done; P1, P4, P6 in progress
+- Pi 5 running Debian Bookworm with HA (Docker), Tool Broker, Ollama, PipeWire
+- Tiered LLM: qwen2.5:1.5b (local, Pi) + llama3.1:8b (sidecar, Mac via Tailscale)
+- SonoBus built from source + PipeWire JACK shim audio routing
+- 194 tests passing, ~11,600 LOC Python
+- Dashboard with chat, tier badges, activity log deployed on Pi
 
-**Open Decisions:**
-- DEC-001: Zigbee dongle selection
-- DEC-002: Z-Wave dongle selection  
-- DEC-003: LLM model (Llama 3 8B vs Mistral 7B)
-- DEC-004: Web search approach
-- DEC-005: Camera selection
+**Open Decisions:** See `SOURCES/decisions_log.md`  
+**Detailed State:** See `SESSION_ARTIFACTS/current_state.md`
 
 ---
 

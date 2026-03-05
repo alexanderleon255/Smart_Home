@@ -5,6 +5,17 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# Resolve platform-aware defaults
+_HOME = Path.home()
+_DEFAULT_PIPER_BIN = os.environ.get(
+    "PIPER_PATH",
+    str(_HOME / ".local" / "piper" / "piper" / "piper"),
+)
+_DEFAULT_PIPER_MODEL_DIR = os.environ.get(
+    "PIPER_MODEL_DIR",
+    str(_HOME / ".local" / "piper" / "models"),
+)
+
 
 class PiperTTS:
     """Text-to-speech synthesis using Piper."""
@@ -12,7 +23,7 @@ class PiperTTS:
     def __init__(
         self,
         voice_model: str = "en_US-lessac-medium",
-        piper_path: str = "piper/piper",
+        piper_path: str = _DEFAULT_PIPER_BIN,
         sample_rate: int = 22050,
     ):
         """Initialize Piper TTS.
@@ -25,6 +36,7 @@ class PiperTTS:
         self.voice_model = voice_model
         self.piper_path = Path(piper_path)
         self.sample_rate = sample_rate
+        self._model_dir = Path(_DEFAULT_PIPER_MODEL_DIR)
         
         if not self.piper_path.exists():
             raise FileNotFoundError(f"Piper not found: {piper_path}")
@@ -39,9 +51,16 @@ class PiperTTS:
         Returns:
             WAV audio data (if output_file is None)
         """
+        # Resolve model path: if voice_model is not itself a path, look in model dir
+        model_arg = self.voice_model
+        if not Path(model_arg).exists():
+            candidate = self._model_dir / f"{self.voice_model}.onnx"
+            if candidate.exists():
+                model_arg = str(candidate)
+
         cmd = [
             str(self.piper_path),
-            "--model", self.voice_model,
+            "--model", model_arg,
             "--output_file", output_file or "-",
         ]
         
@@ -67,16 +86,21 @@ class PiperTTS:
             text: Text to synthesize
             audio_output: Audio output device
         """
-        cmd = [
-            str(self.piper_path),
-            "--model", self.voice_model,
-            "--output-raw",
-            "|",
-            "ffplay", "-nodisp", "-autoexit", "-i", "-",
-        ]
+        # Resolve model path
+        model_arg = self.voice_model
+        if not Path(model_arg).exists():
+            candidate = self._model_dir / f"{self.voice_model}.onnx"
+            if candidate.exists():
+                model_arg = str(candidate)
+
+        cmd = (
+            f'{self.piper_path} --model {model_arg} --output-raw | '
+            f'ffplay -f s16le -ar {self.sample_rate} -ch_layout mono '
+            f'-nodisp -autoexit - 2>/dev/null'
+        )
         
         process = subprocess.Popen(
-            " ".join(cmd),
+            cmd,
             shell=True,
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,

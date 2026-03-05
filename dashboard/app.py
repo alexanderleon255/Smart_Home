@@ -56,6 +56,7 @@ manager = ProcessManager(
 # Activity log — deque so it auto-trims
 activity_log: deque = deque(maxlen=500)
 chat_history: list = []  # [{role, content, tool_calls, timestamp}]
+seen_request_ids: set = set()  # Track audit entries we've already processed
 
 
 def _log(kind: str, data: dict):
@@ -219,7 +220,7 @@ def build_layout():
                             "flexDirection": "column",
                             "gap": "10px",
                         },
-                        children=[html.P("Send a message to get started.", style={"color": "#6c7086", "fontStyle": "italic"})],
+                        children=[html.P("Type a message to talk to Jarvis.", style={"color": "#6c7086", "fontStyle": "italic"})],
                     ),
                     html.Div(style={"display": "flex", "gap": "10px"}, children=[
                         dcc.Input(
@@ -409,7 +410,7 @@ def handle_controls(start_broker, stop_broker, start_ollama, stop_ollama):
     prevent_initial_call=True,
 )
 def send_message(n_clicks, n_submit, text, history):
-    """Send user message to /v1/process and render response."""
+    """Send user message to /v1/process, auto-execute tool calls, render response."""
     if not text or not text.strip():
         return no_update, no_update, no_update
 
@@ -434,11 +435,13 @@ def send_message(n_clicks, n_submit, text, history):
         assistant_text = data.get("text", "")
         tool_calls = data.get("tool_calls", [])
         requires_confirmation = data.get("requires_confirmation", False)
+        tier = data.get("tier", "unknown")
 
         _log("LLM_RESPONSE", {
             "text": assistant_text[:200],
             "tool_calls": len(tool_calls),
             "requires_confirmation": requires_confirmation,
+            "tier": tier,
         })
 
         for tc in tool_calls:
@@ -449,11 +452,52 @@ def send_message(n_clicks, n_submit, text, history):
                 "confirm": tc.get("requires_confirmation", False),
             })
 
+        # Auto-execute tool calls that don't require confirmation
+        tool_results = []
+        for tc in tool_calls:
+            if tc.get("requires_confirmation") or requires_confirmation:
+                tool_results.append({
+                    "tool_name": tc.get("tool_name"),
+                    "status": "awaiting_confirmation",
+                    "message": "Requires user confirmation",
+                })
+                continue
+            try:
+                exec_resp = httpx.post(
+                    f"{BROKER_URL}/v1/execute",
+                    json={
+                        "type": "tool_call",
+                        "tool_name": tc.get("tool_name"),
+                        "arguments": tc.get("arguments", {}),
+                    },
+                    timeout=30.0,
+                )
+                exec_resp.raise_for_status()
+                exec_data = exec_resp.json()
+                tool_results.append({
+                    "tool_name": tc.get("tool_name"),
+                    "status": exec_data.get("status", "ok"),
+                    "result": exec_data.get("result", exec_data.get("message", "")),
+                })
+                _log("TOOL_RESULT", {
+                    "tool": tc.get("tool_name"),
+                    "status": exec_data.get("status", "ok"),
+                })
+            except Exception as exec_err:
+                tool_results.append({
+                    "tool_name": tc.get("tool_name"),
+                    "status": "error",
+                    "result": str(exec_err),
+                })
+                _log("TOOL_ERROR", {"tool": tc.get("tool_name"), "error": str(exec_err)})
+
         history.append({
             "role": "assistant",
             "content": assistant_text,
             "tool_calls": tool_calls,
+            "tool_results": tool_results,
             "requires_confirmation": requires_confirmation,
+            "tier": tier,
             "ts": datetime.now().strftime("%H:%M:%S"),
         })
 
@@ -474,7 +518,7 @@ def send_message(n_clicks, n_submit, text, history):
 def _render_chat(history):
     """Convert chat history into Dash HTML elements."""
     if not history:
-        return [html.P("Send a message to get started.", style={"color": "#6c7086", "fontStyle": "italic"})]
+        return [html.P("Type a message to talk to Jarvis.", style={"color": "#6c7086", "fontStyle": "italic"})]
 
     elements = []
     for msg in history:
@@ -494,33 +538,81 @@ def _render_chat(history):
             ]))
 
         elif role == "assistant":
+            tier = msg.get("tier", "")
+            tier_color = "#a6e3a1" if tier == "local" else "#89b4fa" if tier == "sidecar" else "#6c7086"
+            tier_label = f"[{tier}]" if tier else ""
+
             children = [
-                html.Span(ts, style={"fontSize": "10px", "color": "#6c7086"}),
+                html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=[
+                    html.Span(ts, style={"fontSize": "10px", "color": "#6c7086"}),
+                    html.Span(tier_label, style={
+                        "fontSize": "9px", "color": tier_color, "fontFamily": "monospace",
+                        "background": "#181825", "padding": "1px 6px", "borderRadius": "4px",
+                    }) if tier_label else html.Span(),
+                ]),
                 html.P(msg["content"], style={"margin": "4px 0 0 0"}),
             ]
-            # Show tool calls if any
-            for tc in msg.get("tool_calls", []):
+
+            # Show tool calls with execution results
+            tool_results = msg.get("tool_results", [])
+            for i, tc in enumerate(msg.get("tool_calls", [])):
                 conf = tc.get("confidence", 0)
                 confirm = tc.get("requires_confirmation", False)
-                children.append(html.Div(style={
-                    "marginTop": "8px",
-                    "padding": "8px 12px",
-                    "background": "#1e1e2e",
-                    "borderRadius": "6px",
-                    "borderLeft": f"3px solid {'#f38ba8' if confirm else '#89b4fa'}",
-                    "fontSize": "12px",
-                    "fontFamily": "'JetBrains Mono', monospace",
-                }, children=[
-                    html.Strong(f"Tool: {tc.get('tool_name', '?')}"),
-                    html.Span(f"  conf={conf:.0%}", style={"color": "#6c7086", "marginLeft": "8px"}),
-                    html.Span(" ⚠ CONFIRM" if confirm else "", style={"color": "#f38ba8", "marginLeft": "8px"}),
+
+                # Find matching result
+                result = tool_results[i] if i < len(tool_results) else None
+                result_status = (result or {}).get("status", "")
+                result_text = (result or {}).get("result", "")
+
+                # Status indicator
+                if result_status == "success":
+                    status_icon = "OK"
+                    status_color = "#a6e3a1"
+                elif result_status == "awaiting_confirmation":
+                    status_icon = "CONFIRM?"
+                    status_color = "#f9e2af"
+                elif result_status == "error":
+                    status_icon = "FAIL"
+                    status_color = "#f38ba8"
+                else:
+                    status_icon = ""
+                    status_color = "#6c7086"
+
+                tc_children = [
+                    html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=[
+                        html.Strong(f"Tool: {tc.get('tool_name', '?')}"),
+                        html.Span(f"conf={conf:.0%}", style={"color": "#6c7086", "fontSize": "11px"}),
+                        html.Span(status_icon, style={
+                            "color": status_color, "fontSize": "10px", "fontWeight": "bold",
+                            "background": "#181825", "padding": "1px 6px", "borderRadius": "3px",
+                        }) if status_icon else html.Span(),
+                    ]),
                     html.Pre(json.dumps(tc.get("arguments", {}), indent=2), style={
-                        "margin": "4px 0 0 0",
-                        "color": "#a6adc8",
-                        "fontSize": "11px",
-                        "whiteSpace": "pre-wrap",
+                        "margin": "4px 0 0 0", "color": "#a6adc8",
+                        "fontSize": "11px", "whiteSpace": "pre-wrap",
                     }),
-                ]))
+                ]
+
+                # Show execution result if available
+                if result_text:
+                    result_display = result_text if isinstance(result_text, str) else json.dumps(result_text, indent=2)
+                    if len(result_display) > 300:
+                        result_display = result_display[:300] + "..."
+                    tc_children.append(html.Div(style={
+                        "marginTop": "4px", "padding": "4px 8px",
+                        "background": "#11111b", "borderRadius": "4px",
+                        "fontSize": "11px", "color": status_color,
+                    }, children=[
+                        html.Span("Result: ", style={"fontWeight": "bold"}),
+                        html.Span(result_display),
+                    ]))
+
+                children.append(html.Div(style={
+                    "marginTop": "8px", "padding": "8px 12px",
+                    "background": "#1e1e2e", "borderRadius": "6px",
+                    "borderLeft": f"3px solid {status_color if status_icon else ('#f38ba8' if confirm else '#89b4fa')}",
+                    "fontSize": "12px", "fontFamily": "'JetBrains Mono', monospace",
+                }, children=tc_children))
 
             elements.append(html.Div(style={
                 "alignSelf": "flex-start",
@@ -551,11 +643,62 @@ def _render_chat(history):
     prevent_initial_call=False,
 )
 def update_activity_log(n, clear_clicks):
-    """Render the activity log pane."""
+    """Poll Tool Broker audit log and render activity log pane."""
     trigger = callback_context.triggered_id
     if trigger == "btn-clear-log":
         activity_log.clear()
+        seen_request_ids.clear()
         return [html.Span("Log cleared.", style={"color": "#6c7086"})]
+
+    # Poll the Tool Broker audit log for new entries
+    try:
+        resp = httpx.get(f"{BROKER_URL}/v1/audit/recent", params={"limit": 50}, timeout=3.0)
+        if resp.status_code == 200:
+            audit_entries = resp.json().get("entries", [])
+            # Process newest entries first, but add them in reverse so oldest appears at bottom
+            new_entries = [e for e in reversed(audit_entries) if e.get("request_id") not in seen_request_ids]
+            
+            for entry in new_entries:
+                request_id = entry.get("request_id")
+                if not request_id:
+                    continue
+                seen_request_ids.add(request_id)
+                
+                endpoint = entry.get("endpoint", "")
+                method = entry.get("method", "")
+                ts_str = entry.get("timestamp", "")
+                ts = datetime.fromisoformat(ts_str).strftime("%H:%M:%S") if ts_str else ""
+                
+                # Only log meaningful interactions
+                if endpoint == "/v1/process":
+                    input_summary = entry.get("input_summary", "")
+                    output_summary = entry.get("output_summary", "")
+                    tool_calls_count = entry.get("tool_calls", 0)
+                    latency = entry.get("latency_ms", 0)
+                    
+                    if input_summary:
+                        _log("USER_INPUT", {"text": input_summary, "source": "broker"})
+                    if output_summary:
+                        _log("LLM_RESPONSE", {
+                            "text": output_summary[:150],
+                            "tool_calls": tool_calls_count,
+                            "latency_ms": latency,
+                        })
+                
+                elif endpoint == "/v1/execute":
+                    input_summary = entry.get("input_summary", "")
+                    output_summary = entry.get("output_summary", "")
+                    if input_summary:
+                        _log("TOOL_CALL", {"exec": input_summary[:100]})
+                    if output_summary:
+                        _log("TOOL_CALL", {"result": output_summary[:100]})
+                
+                # Log errors
+                if entry.get("error"):
+                    _log("ERROR", {"endpoint": endpoint, "error": entry.get("error")})
+    
+    except Exception:
+        pass  # Silently fail if broker is unreachable
 
     if not activity_log:
         return [html.Span("No activity yet.", style={"color": "#6c7086", "fontStyle": "italic"})]
@@ -853,7 +996,7 @@ def main():
     import threading
 
     url = f"http://localhost:{DASHBOARD_PORT}"
-    print(f"\n  Smart Home Dashboard → {url}\n")
+    print(f"\n  Smart Home Dashboard -> {url}\n")
     threading.Timer(1.5, lambda: webbrowser.open(url)).start()
 
     app.run(

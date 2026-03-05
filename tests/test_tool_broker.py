@@ -336,7 +336,13 @@ async def client():
         
         # Configure mocks — conversation-first format (DEC-008)
         mock_llm.check_health = AsyncMock(return_value=True)
-        mock_llm.model = "llama3.1:8b"
+        mock_llm.check_health_detailed = AsyncMock(return_value={
+            "local": {"url": "http://localhost:11434", "model": "qwen2.5:1.5b", "connected": True},
+            "sidecar": {"url": None, "model": None, "connected": False},
+            "routing_mode": "auto",
+        })
+        mock_llm.model = "qwen2.5:1.5b"
+        mock_llm.local_model = "qwen2.5:1.5b"
         mock_llm.process = AsyncMock(return_value=ConversationalResponse(
             text="Living room lights are on.",
             tool_calls=[EmbeddedToolCall(

@@ -1,13 +1,17 @@
 """
-Ollama LLM client for Tool Broker.
+Ollama LLM client for Tool Broker — Tiered Routing.
 
-Handles communication with the Ollama API, including:
-- Sending prompts with system instructions
-- Parsing conversation-first JSON responses (DEC-008)
-- Retry logic for malformed responses
+Supports two LLM tiers:
+  - LOCAL  (Pi-resident, lightweight, always-on, e.g. qwen2.5:1.5b)
+  - SIDECAR (Mac-resident, heavier, may be offline, e.g. llama3.1:8b)
 
-Architecture: Conversation-first. The LLM always responds with natural
-language text and optionally includes tool calls when actions are needed.
+Routing modes (LLM_ROUTING_MODE env):
+  auto    — classify request complexity → route to appropriate tier
+  local   — always use local model
+  sidecar — prefer sidecar, fallback to local if unreachable
+
+Fallback: if the chosen tier is unreachable, the other tier is tried
+automatically so the assistant never goes fully offline.
 """
 
 import json
@@ -81,7 +85,35 @@ Respond ONLY with valid JSON. No other text."""
 
 
 class LLMClient:
-    """Client for Ollama LLM API."""
+    """Client for Ollama LLM API with tiered routing.
+    
+    Tiers:
+      local   — lightweight Pi-resident model (always-on)
+      sidecar — heavier Mac-resident model (may be offline)
+    """
+    
+    # Keywords / patterns that suggest higher complexity → sidecar
+    _COMPLEX_KEYWORDS = re.compile(
+        r'\b('
+        r'why|explain|how does|what if|compare|analyze|plan|schedule|create|write|draft'
+        r'|recommend|suggest|should i|help me decide|multi-step|sequence'
+        r'|history|pattern|trend|summarize|review|evaluate|optimize|debug'
+        r')\b',
+        re.IGNORECASE,
+    )
+
+    # Simple patterns — basic device control, status, greetings → local
+    _SIMPLE_KEYWORDS = re.compile(
+        r'\b('
+        r'turn on|turn off|toggle|set|dim|brightness'
+        r'|what is the|what\'s the|temperature|state of|status'
+        r'|hello|hi|hey|good morning|good night|thanks|thank you'
+        r'|yes|no|ok|sure|confirm|cancel'
+        r'|lock|unlock|open|close'
+        r'|timer|alarm'
+        r')\b',
+        re.IGNORECASE,
+    )
     
     def __init__(
         self,
@@ -90,89 +122,230 @@ class LLMClient:
         temperature: float = None,
         max_retries: int = None,
     ):
-        self.base_url = base_url or config.ollama_url
-        self.model = model or config.ollama_model
+        # Primary (local / Pi)
+        self.local_url = base_url or config.ollama_url
+        self.local_model = model or config.ollama_model
+        
+        # Sidecar (Mac) — empty string means no sidecar configured
+        self.sidecar_url = config.ollama_sidecar_url or ""
+        self.sidecar_model = config.ollama_sidecar_model
+        
+        self.routing_mode = config.llm_routing_mode  # "auto" | "local" | "sidecar"
         self.temperature = temperature or config.llm_temperature
         self.max_retries = max_retries or config.llm_max_retries
         self._system_prompt = SYSTEM_PROMPT.format(tool_list=get_tool_list_for_prompt())
+        
+        # Track sidecar availability (avoid repeated timeouts)
+        self._sidecar_available: Optional[bool] = None
+        
+        # Expose for health check / backward compat
+        self.base_url = self.local_url
+        self.model = self.local_model
+        
+        logger.info(
+            f"LLMClient initialized — local={self.local_url}/{self.local_model}, "
+            f"sidecar={'[not configured]' if not self.sidecar_url else f'{self.sidecar_url}/{self.sidecar_model}'}, "
+            f"routing={self.routing_mode}"
+        )
+    
+    # ------------------------------------------------------------------
+    # Health
+    # ------------------------------------------------------------------
     
     async def check_health(self) -> bool:
-        """Check if Ollama is running and model is available."""
+        """Check if at least one Ollama tier is running."""
+        local_ok = await self._check_tier_health(self.local_url, self.local_model)
+        if local_ok:
+            return True
+        if self.sidecar_url:
+            return await self._check_tier_health(self.sidecar_url, self.sidecar_model)
+        return False
+    
+    async def check_health_detailed(self) -> Dict[str, Any]:
+        """Return detailed health status for both tiers."""
+        local_ok = await self._check_tier_health(self.local_url, self.local_model)
+        sidecar_ok = False
+        if self.sidecar_url:
+            sidecar_ok = await self._check_tier_health(self.sidecar_url, self.sidecar_model)
+            self._sidecar_available = sidecar_ok
+        return {
+            "local": {
+                "url": self.local_url,
+                "model": self.local_model,
+                "connected": local_ok,
+            },
+            "sidecar": {
+                "url": self.sidecar_url or None,
+                "model": self.sidecar_model if self.sidecar_url else None,
+                "connected": sidecar_ok,
+            },
+            "routing_mode": self.routing_mode,
+        }
+    
+    async def _check_tier_health(self, url: str, model: str) -> bool:
+        """Check if a specific Ollama instance is running with the expected model."""
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/tags",
-                    timeout=5.0
-                )
+                resp = await client.get(f"{url}/api/tags", timeout=5.0)
                 if resp.status_code == 200:
                     data = resp.json()
                     models = [m.get("name", "") for m in data.get("models", [])]
-                    # Check if our model is available (with or without tag)
-                    model_base = self.model.split(":")[0]
+                    model_base = model.split(":")[0]
                     return any(model_base in m for m in models)
                 return False
         except Exception as e:
-            logger.error(f"Ollama health check failed: {e}")
+            logger.debug(f"Health check failed for {url}: {e}")
             return False
     
+    # ------------------------------------------------------------------
+    # Complexity classification
+    # ------------------------------------------------------------------
+    
+    def classify_complexity(self, text: str) -> str:
+        """Classify request as 'simple' or 'complex'.
+        
+        Returns 'simple' for device control, status queries, greetings.
+        Returns 'complex' for reasoning, planning, multi-step, explanations.
+        """
+        # Very short messages are almost always simple
+        word_count = len(text.split())
+        if word_count <= 4:
+            # Check if it's a simple greeting or yes/no
+            if self._SIMPLE_KEYWORDS.search(text):
+                return "simple"
+            # Even short complex queries like "why?" exist, but default simple
+            if not self._COMPLEX_KEYWORDS.search(text):
+                return "simple"
+        
+        # Check for complex patterns
+        complex_matches = len(self._COMPLEX_KEYWORDS.findall(text))
+        simple_matches = len(self._SIMPLE_KEYWORDS.findall(text))
+        
+        # Long messages with multiple sentences tend to be complex
+        if word_count > 30:
+            return "complex"
+        
+        # If complex keywords dominate, route to sidecar
+        if complex_matches > simple_matches:
+            return "complex"
+        
+        # Default to simple (local handles most home-automation requests)
+        return "simple"
+    
+    def _choose_tier(self, text: str) -> tuple[str, str, str]:
+        """Choose (url, model, tier_name) based on routing mode and text.
+        
+        Returns the PRIMARY choice; caller handles fallback.
+        """
+        if self.routing_mode == "local" or not self.sidecar_url:
+            return (self.local_url, self.local_model, "local")
+        
+        if self.routing_mode == "sidecar":
+            return (self.sidecar_url, self.sidecar_model, "sidecar")
+        
+        # Auto mode
+        complexity = self.classify_complexity(text)
+        if complexity == "complex" and self.sidecar_url:
+            return (self.sidecar_url, self.sidecar_model, "sidecar")
+        return (self.local_url, self.local_model, "local")
+    
+    def _fallback_tier(self, primary_tier: str) -> Optional[tuple[str, str, str]]:
+        """Return the other tier as fallback, or None if not configured."""
+        if primary_tier == "local" and self.sidecar_url:
+            return (self.sidecar_url, self.sidecar_model, "sidecar")
+        if primary_tier == "sidecar":
+            return (self.local_url, self.local_model, "local")
+        return None
+    
+    # ------------------------------------------------------------------
+    # Process (main entry point)
+    # ------------------------------------------------------------------
+
     async def process(self, text: str, context: Optional[Dict[str, Any]] = None) -> ConversationalResponse:
         """
-        Process natural language text and return conversational response.
+        Process natural language text with tiered LLM routing.
         
-        Architecture: Conversation-first (DEC-008). The LLM always responds
-        with natural language text and optionally includes tool calls.
-        
-        Args:
-            text: User's natural language input
-            context: Optional conversation context
-            
-        Returns:
-            ConversationalResponse with text and optional tool_calls
+        1. Classify request complexity
+        2. Route to appropriate tier (local or sidecar)
+        3. On failure, fallback to the other tier
+        4. On total failure, return graceful error message
         """
+        url, model, tier = self._choose_tier(text)
+        logger.info(f"Routing to {tier} tier ({model}@{url}) — mode={self.routing_mode}")
+        
+        # Try primary tier
+        result = await self._try_process(text, context, url, model, tier)
+        if result is not None:
+            return result
+        
+        # Primary failed — try fallback
+        fallback = self._fallback_tier(tier)
+        if fallback:
+            fb_url, fb_model, fb_tier = fallback
+            logger.warning(f"{tier} tier failed, falling back to {fb_tier} ({fb_model}@{fb_url})")
+            result = await self._try_process(text, context, fb_url, fb_model, fb_tier)
+            if result is not None:
+                return result
+        
+        # Both tiers failed
+        logger.error("All LLM tiers exhausted — returning error response")
+        return ConversationalResponse(
+            text="I'm having trouble connecting to my language models right now. "
+                 "Home automation commands can still be executed directly.",
+            tool_calls=[],
+        )
+    
+    async def _try_process(
+        self, text: str, context: Optional[Dict[str, Any]],
+        url: str, model: str, tier: str
+    ) -> Optional[ConversationalResponse]:
+        """Attempt processing with a specific tier. Returns None on failure."""
         attempts = 0
         last_error = None
         original_text = text
+        retry_text = text
         
         while attempts <= self.max_retries:
             try:
-                response_text = await self._call_ollama(text, context)
+                response_text = await self._call_ollama(retry_text, context, url, model)
                 parsed = self._parse_response(response_text)
+                # Tag which tier handled the response (for audit/debug)
+                parsed.tier = tier
                 return parsed
             except (json.JSONDecodeError, ValueError) as e:
                 attempts += 1
                 last_error = e
-                logger.warning(f"LLM response parse failed (attempt {attempts}): {e}")
+                logger.warning(f"[{tier}] Parse failed (attempt {attempts}): {e}")
                 if attempts <= self.max_retries:
-                    # Retry with more explicit instruction
-                    text = f"{original_text}\n\n(Please respond with ONLY valid JSON: {{\"text\": \"...\", \"tool_calls\": [...]}})"
+                    retry_text = f"{original_text}\n\n(Please respond with ONLY valid JSON: {{\"text\": \"...\", \"tool_calls\": [...]}})"
+            except httpx.ConnectError as e:
+                logger.warning(f"[{tier}] Connection failed: {e}")
+                return None  # Immediately try fallback
+            except httpx.TimeoutException as e:
+                logger.warning(f"[{tier}] Timeout: {e}")
+                return None  # Immediately try fallback
             except Exception as e:
-                logger.error(f"LLM call failed: {e}")
-                raise
+                logger.error(f"[{tier}] Unexpected error: {e}")
+                return None
         
-        # All retries exhausted — return a graceful conversational fallback
-        logger.error(f"Failed to get valid JSON from LLM after {self.max_retries + 1} attempts: {last_error}")
-        return ConversationalResponse(
-            text="I'm sorry, I had trouble processing that. Could you try again?",
-            tool_calls=[],
-        )
+        logger.warning(f"[{tier}] All {self.max_retries + 1} parse attempts failed: {last_error}")
+        return None  # Let caller try fallback
 
     async def process_legacy(self, text: str, context: Optional[Dict[str, Any]] = None) -> LLMResponse:
         """
-        Legacy process method — returns old-style ToolCall/Clarification/Confirmation.
+        Legacy process method -- returns old-style ToolCall/Clarification/Confirmation.
         
         Maintained for backward compatibility with /v1/execute flow.
-        Converts ConversationalResponse → legacy LLMResponse types.
+        Converts ConversationalResponse -> legacy LLMResponse types.
         """
         conv = await self.process(text, context)
         
         if not conv.tool_calls:
-            # Pure conversation → treat as clarification (closest legacy type)
             return ClarificationRequest(
                 type=ToolCallType.CLARIFICATION,
                 question=conv.text,
             )
         
-        # Has tool calls — check for confirmation
         first_call = conv.tool_calls[0]
         if first_call.requires_confirmation:
             return ConfirmationRequest(
@@ -182,7 +355,6 @@ class LLMClient:
                 risk_level="medium",
             )
         
-        # Normal tool call
         return ToolCall(
             type=ToolCallType.TOOL_CALL,
             tool_name=first_call.tool_name,
@@ -190,35 +362,39 @@ class LLMClient:
             confidence=first_call.confidence,
         )
     
-    async def _call_ollama(self, text: str, context: Optional[Dict[str, Any]] = None) -> str:
-        """Make raw API call to Ollama."""
+    # ------------------------------------------------------------------
+    # Ollama API call
+    # ------------------------------------------------------------------
+    
+    async def _call_ollama(
+        self, text: str, context: Optional[Dict[str, Any]], url: str, model: str
+    ) -> str:
+        """Make raw API call to a specific Ollama instance."""
         messages = [
             {"role": "system", "content": self._system_prompt},
         ]
         
-        # Add context if provided (conversation history)
         if context and "messages" in context:
             for msg in context["messages"]:
                 messages.append(msg)
         
-        # Add current user message
         messages.append({"role": "user", "content": text})
         
         payload = {
-            "model": self.model,
+            "model": model,
             "messages": messages,
             "stream": False,
             "options": {
                 "temperature": self.temperature,
             },
-            "format": "json",  # Request JSON mode
+            "format": "json",
         }
         
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{self.base_url}/api/chat",
+                f"{url}/api/chat",
                 json=payload,
-                timeout=60.0  # LLM inference can take a while
+                timeout=60.0
             )
             resp.raise_for_status()
             data = resp.json()
