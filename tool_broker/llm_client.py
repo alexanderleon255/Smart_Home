@@ -17,9 +17,65 @@ automatically so the assistant never goes fully offline.
 import json
 import logging
 import re
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import httpx
+
+
+class TierStatus(str, Enum):
+    """Granular status for an LLM tier."""
+    CONNECTED = "connected"           # Healthy
+    NOT_CONFIGURED = "not_configured" # No URL set
+    UNREACHABLE = "unreachable"       # Connection refused / DNS failure
+    TIMEOUT = "timeout"               # Service exists but too slow
+    MODEL_MISSING = "model_missing"   # Ollama running but model not pulled
+    PARSE_ERROR = "parse_error"       # Model responded but output unparseable
+    UNKNOWN_ERROR = "unknown_error"   # Catch-all
+
+
+# Human-readable messages keyed by (tier_name, status)
+_TIER_ERROR_MESSAGES: Dict[TierStatus, str] = {
+    TierStatus.NOT_CONFIGURED: "{tier_label} LLM is not configured",
+    TierStatus.UNREACHABLE: "{tier_label} LLM ({url}) is not reachable — is Ollama running and bound to 0.0.0.0?",
+    TierStatus.TIMEOUT: "{tier_label} LLM ({url}) timed out — Ollama may be overloaded or the model is too large",
+    TierStatus.MODEL_MISSING: "{tier_label} LLM ({url}) is running but model '{model}' is not installed — run 'ollama pull {model}'",
+    TierStatus.PARSE_ERROR: "{tier_label} LLM ({url}/{model}) returned unparseable output after retries",
+    TierStatus.UNKNOWN_ERROR: "{tier_label} LLM ({url}) encountered an unexpected error: {detail}",
+}
+
+
+@dataclass
+class TierDiagnostic:
+    """Diagnostic result for a single LLM tier attempt."""
+    tier: str              # "local" or "sidecar"
+    url: str
+    model: str
+    status: TierStatus
+    detail: str = ""       # Raw error string for unknown_error
+    latency_ms: int = 0    # Optional timing
+
+    @property
+    def ok(self) -> bool:
+        return self.status == TierStatus.CONNECTED
+
+    @property
+    def message(self) -> str:
+        """Human-readable error message."""
+        if self.ok:
+            return f"{self.tier.capitalize()} LLM ({self.url}/{self.model}) is healthy"
+        template = _TIER_ERROR_MESSAGES.get(
+            self.status,
+            "{tier_label} LLM: unknown status ({detail})",
+        )
+        tier_label = "Pi (local)" if self.tier == "local" else "Mac (sidecar)"
+        return template.format(
+            tier_label=tier_label,
+            url=self.url,
+            model=self.model,
+            detail=self.detail or self.status.value,
+        )
 
 from .config import config
 from .schemas import (
@@ -154,36 +210,48 @@ class LLMClient:
     
     async def check_health(self) -> bool:
         """Check if at least one Ollama tier is running."""
-        local_ok = await self._check_tier_health(self.local_url, self.local_model)
-        if local_ok:
+        local_diag = await self._diagnose_tier("local", self.local_url, self.local_model)
+        if local_diag.ok:
             return True
         if self.sidecar_url:
-            return await self._check_tier_health(self.sidecar_url, self.sidecar_model)
+            sidecar_diag = await self._diagnose_tier("sidecar", self.sidecar_url, self.sidecar_model)
+            return sidecar_diag.ok
         return False
     
     async def check_health_detailed(self) -> Dict[str, Any]:
         """Return detailed health status for both tiers."""
-        local_ok = await self._check_tier_health(self.local_url, self.local_model)
-        sidecar_ok = False
+        local_diag = await self._diagnose_tier("local", self.local_url, self.local_model)
+        sidecar_diag: Optional[TierDiagnostic] = None
         if self.sidecar_url:
-            sidecar_ok = await self._check_tier_health(self.sidecar_url, self.sidecar_model)
-            self._sidecar_available = sidecar_ok
+            sidecar_diag = await self._diagnose_tier("sidecar", self.sidecar_url, self.sidecar_model)
+            self._sidecar_available = sidecar_diag.ok
+        else:
+            sidecar_diag = TierDiagnostic(
+                tier="sidecar", url="", model="",
+                status=TierStatus.NOT_CONFIGURED,
+            )
         return {
             "local": {
                 "url": self.local_url,
                 "model": self.local_model,
-                "connected": local_ok,
+                "connected": local_diag.ok,
+                "status": local_diag.status.value,
+                "message": local_diag.message,
             },
             "sidecar": {
                 "url": self.sidecar_url or None,
                 "model": self.sidecar_model if self.sidecar_url else None,
-                "connected": sidecar_ok,
+                "connected": sidecar_diag.ok,
+                "status": sidecar_diag.status.value,
+                "message": sidecar_diag.message,
             },
             "routing_mode": self.routing_mode,
         }
     
-    async def _check_tier_health(self, url: str, model: str) -> bool:
-        """Check if a specific Ollama instance is running with the expected model."""
+    async def _diagnose_tier(self, tier: str, url: str, model: str) -> TierDiagnostic:
+        """Diagnose a specific Ollama tier with granular error classification."""
+        if not url:
+            return TierDiagnostic(tier=tier, url="", model=model, status=TierStatus.NOT_CONFIGURED)
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(f"{url}/api/tags", timeout=5.0)
@@ -191,11 +259,25 @@ class LLMClient:
                     data = resp.json()
                     models = [m.get("name", "") for m in data.get("models", [])]
                     model_base = model.split(":")[0]
-                    return any(model_base in m for m in models)
-                return False
+                    if any(model_base in m for m in models):
+                        return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.CONNECTED)
+                    return TierDiagnostic(
+                        tier=tier, url=url, model=model,
+                        status=TierStatus.MODEL_MISSING,
+                        detail=f"available models: {', '.join(models) or 'none'}",
+                    )
+                return TierDiagnostic(
+                    tier=tier, url=url, model=model,
+                    status=TierStatus.UNKNOWN_ERROR,
+                    detail=f"HTTP {resp.status_code}",
+                )
+        except httpx.ConnectError as e:
+            return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.UNREACHABLE, detail=str(e))
+        except httpx.TimeoutException as e:
+            return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.TIMEOUT, detail=str(e))
         except Exception as e:
             logger.debug(f"Health check failed for {url}: {e}")
-            return False
+            return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.UNKNOWN_ERROR, detail=str(e))
     
     # ------------------------------------------------------------------
     # Complexity classification
@@ -268,13 +350,16 @@ class LLMClient:
         1. Classify request complexity
         2. Route to appropriate tier (local or sidecar)
         3. On failure, fallback to the other tier
-        4. On total failure, return graceful error message
+        4. On total failure, return graceful error with per-tier diagnostics
         """
         url, model, tier = self._choose_tier(text)
         logger.info(f"Routing to {tier} tier ({model}@{url}) — mode={self.routing_mode}")
         
+        diagnostics: List[TierDiagnostic] = []
+        
         # Try primary tier
-        result = await self._try_process(text, context, url, model, tier)
+        result, diag = await self._try_process(text, context, url, model, tier)
+        diagnostics.append(diag)
         if result is not None:
             return result
         
@@ -282,24 +367,41 @@ class LLMClient:
         fallback = self._fallback_tier(tier)
         if fallback:
             fb_url, fb_model, fb_tier = fallback
-            logger.warning(f"{tier} tier failed, falling back to {fb_tier} ({fb_model}@{fb_url})")
-            result = await self._try_process(text, context, fb_url, fb_model, fb_tier)
+            logger.warning(f"{tier} tier failed ({diag.status.value}), falling back to {fb_tier} ({fb_model}@{fb_url})")
+            result, fb_diag = await self._try_process(text, context, fb_url, fb_model, fb_tier)
+            diagnostics.append(fb_diag)
             if result is not None:
                 return result
         
-        # Both tiers failed
+        # Both tiers failed — build specific error message
         logger.error("All LLM tiers exhausted — returning error response")
+        error_lines = self._build_failure_message(diagnostics)
         return ConversationalResponse(
-            text="I'm having trouble connecting to my language models right now. "
-                 "Home automation commands can still be executed directly.",
+            text=error_lines,
             tool_calls=[],
+            tier="none",
         )
+    
+    @staticmethod
+    def _build_failure_message(diagnostics: List[TierDiagnostic]) -> str:
+        """Build a human-readable error from per-tier diagnostics."""
+        lines = ["I can't reach any language model right now. Here's what I know:"]
+        for diag in diagnostics:
+            lines.append(f"  • {diag.message}")
+        lines.append("")
+        lines.append("Home automation commands via /v1/execute still work directly. "
+                     "Check Ollama status on both Pi and Mac.")
+        return "\n".join(lines)
     
     async def _try_process(
         self, text: str, context: Optional[Dict[str, Any]],
         url: str, model: str, tier: str
-    ) -> Optional[ConversationalResponse]:
-        """Attempt processing with a specific tier. Returns None on failure."""
+    ) -> tuple[Optional[ConversationalResponse], TierDiagnostic]:
+        """Attempt processing with a specific tier.
+        
+        Returns (response, diagnostic). Response is None on failure; the
+        diagnostic always contains a granular status code and message.
+        """
         attempts = 0
         last_error = None
         original_text = text
@@ -309,9 +411,9 @@ class LLMClient:
             try:
                 response_text = await self._call_ollama(retry_text, context, url, model)
                 parsed = self._parse_response(response_text)
-                # Tag which tier handled the response (for audit/debug)
                 parsed.tier = tier
-                return parsed
+                diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.CONNECTED)
+                return parsed, diag
             except (json.JSONDecodeError, ValueError) as e:
                 attempts += 1
                 last_error = e
@@ -319,17 +421,29 @@ class LLMClient:
                 if attempts <= self.max_retries:
                     retry_text = f"{original_text}\n\n(Please respond with ONLY valid JSON: {{\"text\": \"...\", \"tool_calls\": [...]}})"
             except httpx.ConnectError as e:
-                logger.warning(f"[{tier}] Connection failed: {e}")
-                return None  # Immediately try fallback
+                logger.warning(f"[{tier}] Connection refused: {e}")
+                diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.UNREACHABLE, detail=str(e))
+                return None, diag
             except httpx.TimeoutException as e:
                 logger.warning(f"[{tier}] Timeout: {e}")
-                return None  # Immediately try fallback
+                diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.TIMEOUT, detail=str(e))
+                return None, diag
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"[{tier}] HTTP error: {e}")
+                # Ollama returns 404 when model not found on /api/chat
+                if e.response.status_code == 404:
+                    diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.MODEL_MISSING, detail=str(e))
+                else:
+                    diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.UNKNOWN_ERROR, detail=f"HTTP {e.response.status_code}")
+                return None, diag
             except Exception as e:
                 logger.error(f"[{tier}] Unexpected error: {e}")
-                return None
+                diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.UNKNOWN_ERROR, detail=str(e))
+                return None, diag
         
         logger.warning(f"[{tier}] All {self.max_retries + 1} parse attempts failed: {last_error}")
-        return None  # Let caller try fallback
+        diag = TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.PARSE_ERROR, detail=str(last_error))
+        return None, diag
 
     async def process_legacy(self, text: str, context: Optional[Dict[str, Any]] = None) -> LLMResponse:
         """

@@ -241,15 +241,28 @@ async def health():
     Health check endpoint.
     
     Returns connectivity status for Ollama tiers and Home Assistant.
+    Status values:
+      - ok:          At least one LLM tier + HA connected
+      - degraded:    Partial connectivity (one LLM down, or HA down)
+      - llm_offline: No LLM tier reachable (process will return errors)
     """
     ollama_ok = await llm_client.check_health()
     ha_ok = await ha_client.check_health() if ha_client.is_configured else False
     
-    # Detailed tier info
+    # Detailed tier info (now includes status enum + human message per tier)
     tier_info = await llm_client.check_health_detailed()
     
-    status = "ok" if ollama_ok else "degraded"
-    if not ha_ok and ha_client.is_configured:
+    # Determine overall status
+    local_connected = tier_info["local"]["connected"]
+    sidecar_connected = tier_info["sidecar"]["connected"]
+    both_llm_up = local_connected and sidecar_connected
+    any_llm_up = local_connected or sidecar_connected
+    
+    if not any_llm_up:
+        status = "llm_offline"
+    elif both_llm_up and ha_ok:
+        status = "ok"
+    else:
         status = "degraded"
     
     return HealthResponse(
@@ -356,6 +369,7 @@ async def process(
         
         elapsed = int((time.time() - start_time) * 1000)
         tier_label = getattr(conv, 'tier', None) or 'unknown'
+        is_llm_error = tier_label == 'none'
         logger.info(f"Processed in {elapsed}ms via {tier_label}: {len(validated_calls)} tool calls, confirmation={'yes' if needs_confirmation else 'no'}")
         
         return ProcessResponse(
@@ -364,6 +378,7 @@ async def process(
             tool_results=[],
             requires_confirmation=needs_confirmation,
             tier=tier_label,
+            llm_error=is_llm_error,
         )
         
     except ValueError as e:

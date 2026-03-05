@@ -337,8 +337,8 @@ async def client():
         # Configure mocks — conversation-first format (DEC-008)
         mock_llm.check_health = AsyncMock(return_value=True)
         mock_llm.check_health_detailed = AsyncMock(return_value={
-            "local": {"url": "http://localhost:11434", "model": "qwen2.5:1.5b", "connected": True},
-            "sidecar": {"url": None, "model": None, "connected": False},
+            "local": {"url": "http://localhost:11434", "model": "qwen2.5:1.5b", "connected": True, "status": "connected", "message": "Pi (local) LLM (http://localhost:11434/qwen2.5:1.5b) is healthy"},
+            "sidecar": {"url": None, "model": None, "connected": False, "status": "not_configured", "message": "Mac (sidecar) LLM is not configured"},
             "routing_mode": "auto",
         })
         mock_llm.model = "qwen2.5:1.5b"

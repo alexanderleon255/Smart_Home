@@ -88,8 +88,11 @@ class TestContextBuilderInit:
         )
         assert cb.state_store is not None
         assert cb.event_store is not None
-        # chromadb is installed, so vector_store should be available
-        assert cb.vector_store is not None
+        # vector_store depends on chromadb; may be None on Python 3.14+
+        # where chromadb's pydantic v1 shim is incompatible
+        import sys
+        if sys.version_info < (3, 14):
+            assert cb.vector_store is not None
 
     def test_injected_stores(self, state_store, event_store):
         cb = ContextBuilder(state_store=state_store, event_store=event_store)
