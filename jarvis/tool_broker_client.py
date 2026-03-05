@@ -56,6 +56,16 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         text_response = result.get("text", "")
         tool_calls = result.get("tool_calls", [])
         requires_confirmation = result.get("requires_confirmation", False)
+        tier = result.get("tier")
+        llm_error = result.get("llm_error", False)
+        
+        # If the LLM is fully offline, pass through the diagnostic text
+        if llm_error:
+            return {
+                "response": text_response or "All language models are currently offline.",
+                "llm_error": True,
+                "tier": "none",
+            }
         
         # If confirmation is needed, ask the user without executing
         if requires_confirmation:
@@ -64,6 +74,8 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
                 "response": text_response or f"Please confirm: {actions}",
                 "requires_confirmation": True,
                 "tool_calls": tool_calls,
+                "tier": tier,
+                "llm_error": False,
             }
         
         # Auto-execute tool calls that don't need confirmation
@@ -107,18 +119,26 @@ def process_query(text: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         return {
             "response": final_response or "Done",
             "tool_results": tool_results,
+            "tier": tier,
+            "llm_error": False,
         }
         
     except requests.exceptions.ConnectionError:
         return {
-            "response": "I'm unable to connect to my backend service. Please ensure the Tool Broker is running."
+            "response": "I'm unable to connect to my backend service. Please ensure the Tool Broker is running.",
+            "llm_error": True,
+            "tier": None,
         }
     except requests.exceptions.Timeout:
         return {
-            "response": "The request timed out. Please try again."
+            "response": "The request timed out. Please try again.",
+            "llm_error": True,
+            "tier": None,
         }
     except Exception as e:
         print(f"Error processing query: {e}")
         return {
-            "response": "I'm sorry, I encountered an error processing your request."
+            "response": "I'm sorry, I encountered an error processing your request.",
+            "llm_error": True,
+            "tier": None,
         }

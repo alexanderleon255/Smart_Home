@@ -34,7 +34,11 @@ Smart_Home/
 ├── References/           # Architecture specs, threat model
 ├── cameras/              # Camera event processing
 ├── dashboard/            # Dash-based management dashboard
+├── deploy/               # Deployment configs (systemd units, bootstrap)
+│   ├── systemd/          # Canonical systemd user unit files
+│   └── bootstrap.sh      # Full Pi setup from fresh OS
 ├── digests/              # Daily/weekly digest generators
+├── docker/               # Docker Compose (HA + Mosquitto)
 ├── jarvis/               # Voice assistant integration
 ├── jarvis_audio/         # Audio recording, STT, TTS, wake word
 ├── memory/               # Structured state, event log, vector store

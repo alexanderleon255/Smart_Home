@@ -1,0 +1,17 @@
+[Unit]
+Description=Jarvis PipeWire Virtual Audio Devices
+After=pipewire-pulse.service
+Requires=pipewire-pulse.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# TTS output sink at 22050Hz
+ExecStart=/usr/bin/pactl load-module module-null-sink sink_name=jarvis-tts-sink sink_properties=device.description=Jarvis-TTS-Sink rate=22050
+# Mic source at 16000Hz, fed from TTS sink monitor
+ExecStart=/usr/bin/pactl load-module module-virtual-source source_name=jarvis-mic-source master=jarvis-tts-sink.monitor source_properties=device.description=Jarvis-Mic-Source rate=16000
+ExecStop=/usr/bin/pactl unload-module module-virtual-source
+ExecStop=/usr/bin/pactl unload-module module-null-sink
+
+[Install]
+WantedBy=default.target

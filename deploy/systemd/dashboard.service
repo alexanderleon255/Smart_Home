@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart Home Dashboard (Dash)
+After=network-online.target tool-broker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Smart_Home
+ExecStart=%h/Smart_Home/.venv/bin/python3 -m dashboard.app
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+Environment="PATH=%h/Smart_Home/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target

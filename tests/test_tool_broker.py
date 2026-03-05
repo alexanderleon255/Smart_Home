@@ -354,6 +354,11 @@ async def client():
         
         mock_ha.is_configured = True
         mock_ha.check_health = AsyncMock(return_value=True)
+        mock_ha.diagnose = AsyncMock(return_value=MagicMock(
+            ok=True,
+            status=MagicMock(value="connected"),
+            message="Home Assistant (http://localhost:8123) is healthy",
+        ))
         mock_ha.get_entity_ids = AsyncMock(return_value=["light.living_room"])
         
         mock_validator.cache_size = 5

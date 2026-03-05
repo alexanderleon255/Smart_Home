@@ -158,6 +158,14 @@ class HealthResponse(BaseModel):
     model: str = Field(..., description="Primary LLM model name")
     ollama_connected: bool = Field(..., description="At least one Ollama tier connected")
     ha_connected: bool = Field(..., description="Home Assistant connectivity status")
+    ha_status: Optional[str] = Field(
+        default=None,
+        description="Granular HA status: connected, not_configured, auth_failed, unreachable, timeout, unknown_error"
+    )
+    ha_message: Optional[str] = Field(
+        default=None,
+        description="Human-readable HA status message"
+    )
     entity_cache_size: int = Field(default=0, description="Number of cached entities")
     llm_tiers: Optional[Dict[str, Any]] = Field(
         default=None,

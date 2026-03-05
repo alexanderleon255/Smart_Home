@@ -1,8 +1,8 @@
 # Smart Home Progress Tracker
 
 **Created:** 2026-03-02  
-**Last Updated:** 2026-03-04  
-**Status:** Active (Rev 4.0 -- Post Pi migration, audio pipeline, SonoBus)
+**Last Updated:** 2026-03-05  
+**Status:** Active (Rev 5.0 -- Diagnostic pattern, deploy bootstrap, service persistence)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Phase | Name | Items | Complete | Status |
 |-------|------|-------|----------|--------|
-| P1 | Hub Setup | 8 | 5 | 🟢 63% |
+| P1 | Hub Setup | 9 | 6 | 🟢 67% |
 | P2 | AI Sidecar | 7 | 7 | 🟢 100% |
 | P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
 | P4 | Security Hardening | 6 | 2 | 🟡 33% |
@@ -18,16 +18,16 @@
 | P6 | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
-| **TOTAL** | | **55** | **35** | **🟢 64%** |
+| **TOTAL** | | **56** | **36** | **🟢 64%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
-**Tests:** 194 passing (pytest, ~25s)  
+**Tests:** 248 passing (pytest, ~22s)  
 **Code:** ~11,600 LOC across 11 packages  
 **Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi
 
 ---
 
-## Phase 1: Hub Setup (5/8 = 63%)
+## Phase 1: Hub Setup (6/9 = 67%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
@@ -39,6 +39,7 @@
 | P1-06 | MQTT Broker Setup | ✅ COMPLETE | 2026-03-03 | Mosquitto via Docker |
 | P1-07 | Basic Automation Test | ✅ COMPLETE | 2026-03-04 | TV on/off via HA service calls working |
 | P1-08 | Backup Configuration | ⬜ NOT STARTED | - | |
+| P1-09 | Service Persistence & Deploy Script | ✅ COMPLETE | 2026-03-05 | 5 systemd user units (ollama, tool-broker, dashboard, jarvis-audio-devices, sonobus); linger enabled; deploy/bootstrap.sh for full Pi replication |
 
 **Phase 1 Notes:** Pi 5 running Debian Bookworm (not Home Assistant OS). HA Core runs in Docker. Migration from HAOS to Debian was necessary to support Tool Broker, Ollama, and audio pipeline natively on the Pi.
 
@@ -54,7 +55,7 @@
 | P2-04 | Tool Broker Implementation | ✅ COMPLETE | 2026-03-02 | main.py with all endpoints; 45 tests |
 | P2-05 | Home Assistant API Integration | ✅ COMPLETE | 2026-03-02 | ha_client.py with async service calls |
 | P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation; 46 entities cached |
-| P2-07 | End-to-End Test | ✅ COMPLETE | 2026-03-04 | Live HA + Ollama + Tool Broker verified on Pi |
+| P2-07 | End-to-End Test | ✅ COMPLETE | 2026-03-04 | Live HA + Ollama + Tool Broker verified on Pi; graceful tier failure diagnostics (HADiagnostic/TierDiagnostic pattern) |
 
 **Phase 2 Status:** ✅ **COMPLETE**
 - Tool Broker migrated from Mac to Pi (runs at localhost:8000)
@@ -197,6 +198,8 @@
 | 2026-03-04 | Audio pipeline install | P6-05, P6-06 | whisper.cpp built, Piper installed, PyAudio, openWakeWord on Pi |
 | 2026-03-04 | Linux audio migration | P6-02, P6-03 | All 6 audio files updated macOS->Linux; PipeWire virtual devices |
 | 2026-03-04 | SonoBus + wiring | P6-01 | SonoBus built from source ARM64, PipeWire JACK shim, wire scripts |
+| 2026-03-05 | Service persistence | P1-09 | 5 systemd user units, linger, Ollama 0.0.0.0 fix, deploy/ bootstrap |
+| 2026-03-05 | Diagnostic pattern | P2-07 | HADiagnostic + TierDiagnostic pattern across HA client, dashboard, Jarvis client, audio pipeline; 248 tests passing |
 
 ---
 

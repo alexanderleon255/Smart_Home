@@ -97,7 +97,7 @@ class ProcessManager:
         return self.ollama
 
     def check_broker(self) -> ServiceState:
-        """Ping Tool Broker /v1/health."""
+        """Ping Tool Broker /v1/health and propagate tier/HA diagnostics."""
         if self._broker_proc and self._broker_proc.poll() is not None:
             self._broker_proc = None
 
@@ -107,9 +107,36 @@ class ProcessManager:
                 data = resp.json()
                 self.broker.status = ServiceStatus.RUNNING
                 self.broker.model = data.get("model")
-                ha = "HA connected" if data.get("ha_connected") else "HA disconnected"
-                entities = data.get("entity_cache_size", 0)
-                self.broker.detail = f"{ha} · {entities} entities cached"
+
+                # --- Build rich detail from structured health data ---
+                parts = []
+
+                # Overall status
+                overall = data.get("status", "unknown")
+                if overall != "ok":
+                    parts.append(f"Status: {overall}")
+
+                # HA diagnostic
+                ha_msg = data.get("ha_message")
+                ha_status = data.get("ha_status", "unknown")
+                if ha_status == "connected":
+                    entities = data.get("entity_cache_size", 0)
+                    parts.append(f"HA connected · {entities} entities")
+                elif ha_msg:
+                    parts.append(ha_msg)
+                else:
+                    parts.append("HA disconnected")
+
+                # LLM tier diagnostics
+                tiers = data.get("llm_tiers", {})
+                for tier_name in ("local", "sidecar"):
+                    tier = tiers.get(tier_name, {})
+                    tier_status = tier.get("status", "unknown")
+                    if tier_status != "connected":
+                        tier_msg = tier.get("message", f"{tier_name} {tier_status}")
+                        parts.append(tier_msg)
+
+                self.broker.detail = " · ".join(parts) if parts else "Healthy"
             else:
                 self.broker.status = ServiceStatus.ERROR
                 self.broker.detail = f"HTTP {resp.status_code}"
@@ -126,6 +153,84 @@ class ProcessManager:
         """Run all health checks."""
         self.check_ollama()
         self.check_broker()
+
+    # ------------------------------------------------------------------
+    # Audio pipeline checks
+    # ------------------------------------------------------------------
+
+    def check_audio_pipeline(self) -> dict:
+        """Check PipeWire virtual devices and SonoBus status.
+
+        Returns dict with keys: pipewire_running, tts_sink, mic_source,
+        sonobus_running, detail.
+        """
+        result = {
+            "pipewire_running": False,
+            "tts_sink": False,
+            "mic_source": False,
+            "sonobus_running": False,
+            "detail": "Not checked",
+        }
+
+        # Check PipeWire
+        try:
+            pw = subprocess.run(
+                ["pactl", "info"], capture_output=True, text=True, timeout=5,
+            )
+            if pw.returncode == 0:
+                result["pipewire_running"] = True
+            else:
+                result["detail"] = "PipeWire/PulseAudio not running"
+                return result
+        except FileNotFoundError:
+            result["detail"] = "pactl not found — PipeWire not installed"
+            return result
+        except Exception as exc:
+            result["detail"] = f"PipeWire check failed: {str(exc)[:80]}"
+            return result
+
+        # Check virtual devices (jarvis-tts-sink, jarvis-mic-source)
+        try:
+            sinks = subprocess.run(
+                ["pactl", "list", "short", "sinks"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if "jarvis-tts-sink" in sinks.stdout:
+                result["tts_sink"] = True
+
+            sources = subprocess.run(
+                ["pactl", "list", "short", "sources"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if "jarvis-mic-source" in sources.stdout:
+                result["mic_source"] = True
+        except Exception:
+            pass
+
+        # Check SonoBus process
+        try:
+            ps = subprocess.run(
+                ["pgrep", "-f", "sonobus"], capture_output=True, text=True, timeout=5,
+            )
+            result["sonobus_running"] = ps.returncode == 0
+        except Exception:
+            pass
+
+        # Build detail string
+        issues = []
+        if not result["tts_sink"]:
+            issues.append("jarvis-tts-sink missing")
+        if not result["mic_source"]:
+            issues.append("jarvis-mic-source missing")
+        if not result["sonobus_running"]:
+            issues.append("SonoBus not running")
+
+        if not issues:
+            result["detail"] = "Audio pipeline healthy"
+        else:
+            result["detail"] = "; ".join(issues)
+
+        return result
 
     # ------------------------------------------------------------------
     # Ollama management

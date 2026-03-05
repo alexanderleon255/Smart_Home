@@ -1,0 +1,19 @@
+[Unit]
+Description=SonoBus Headless Audio Bridge
+After=jarvis-audio-devices.service pipewire-pulse.service
+Requires=jarvis-audio-devices.service
+
+[Service]
+Type=simple
+# PipeWire JACK shim — SonoBus (JUCE) dlopen()s libjack at runtime
+Environment="LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/pipewire-0.3/jack"
+ExecStart=/usr/local/bin/sonobus --headless -g jarvis-audio -n jarvis-pi
+# After SonoBus registers ports, wire them to Jarvis virtual devices
+ExecStartPost=/bin/sleep 3
+ExecStartPost=%h/Smart_Home/jarvis_audio/scripts/wire_sonobus.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+
+[Install]
+WantedBy=default.target

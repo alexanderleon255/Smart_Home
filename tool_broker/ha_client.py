@@ -5,9 +5,12 @@ Handles all communication with the Home Assistant REST API:
 - Entity state queries
 - Service calls
 - Entity listing
+- Structured diagnostics (HADiagnostic pattern, mirrors TierDiagnostic)
 """
 
 import logging
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -16,6 +19,10 @@ from .config import config
 
 logger = logging.getLogger(__name__)
 
+
+# ============================================================================
+# Exceptions
+# ============================================================================
 
 class HAClientError(Exception):
     """Base exception for Home Assistant client errors."""
@@ -30,6 +37,53 @@ class HAConnectionError(HAClientError):
 class HAAuthError(HAClientError):
     """Authentication failed."""
     pass
+
+
+# ============================================================================
+# Diagnostic types (mirrors TierDiagnostic pattern from llm_client)
+# ============================================================================
+
+class HAStatus(str, Enum):
+    """Granular status for Home Assistant connectivity."""
+    CONNECTED = "connected"
+    NOT_CONFIGURED = "not_configured"
+    AUTH_FAILED = "auth_failed"
+    UNREACHABLE = "unreachable"
+    TIMEOUT = "timeout"
+    UNKNOWN_ERROR = "unknown_error"
+
+
+_HA_ERROR_MESSAGES: Dict[HAStatus, str] = {
+    HAStatus.NOT_CONFIGURED: "Home Assistant is not configured (no API token set)",
+    HAStatus.AUTH_FAILED: "Home Assistant authentication failed — check your HA_TOKEN",
+    HAStatus.UNREACHABLE: "Home Assistant ({url}) is not reachable — is it running?",
+    HAStatus.TIMEOUT: "Home Assistant ({url}) timed out — it may be overloaded",
+    HAStatus.UNKNOWN_ERROR: "Home Assistant ({url}) encountered an unexpected error: {detail}",
+}
+
+
+@dataclass
+class HADiagnostic:
+    """Diagnostic result for Home Assistant connectivity."""
+    url: str
+    status: HAStatus
+    detail: str = ""
+    latency_ms: int = 0
+
+    @property
+    def ok(self) -> bool:
+        return self.status == HAStatus.CONNECTED
+
+    @property
+    def message(self) -> str:
+        """Human-readable status message."""
+        if self.ok:
+            return f"Home Assistant ({self.url}) is healthy"
+        template = _HA_ERROR_MESSAGES.get(
+            self.status,
+            "Home Assistant: unknown status ({detail})",
+        )
+        return template.format(url=self.url, detail=self.detail or self.status.value)
 
 
 class HAClient:
@@ -49,27 +103,73 @@ class HAClient:
     
     async def check_health(self) -> bool:
         """Check if Home Assistant is reachable and authenticated."""
+        diag = await self.diagnose()
+        return diag.ok
+
+    async def diagnose(self) -> HADiagnostic:
+        """Structured health check — returns HADiagnostic with granular status."""
+        import time
+
         if not self.is_configured:
             logger.warning("HA client not configured (no token)")
-            return False
-        
+            return HADiagnostic(
+                url=self.base_url,
+                status=HAStatus.NOT_CONFIGURED,
+            )
+
+        start = time.monotonic()
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
                     f"{self.base_url}/api/",
                     headers=self._headers,
-                    timeout=5.0
+                    timeout=5.0,
                 )
+                elapsed = int((time.monotonic() - start) * 1000)
                 if resp.status_code == 401:
                     logger.error("HA authentication failed")
-                    return False
-                return resp.status_code == 200
+                    return HADiagnostic(
+                        url=self.base_url,
+                        status=HAStatus.AUTH_FAILED,
+                        latency_ms=elapsed,
+                    )
+                if resp.status_code == 200:
+                    return HADiagnostic(
+                        url=self.base_url,
+                        status=HAStatus.CONNECTED,
+                        latency_ms=elapsed,
+                    )
+                return HADiagnostic(
+                    url=self.base_url,
+                    status=HAStatus.UNKNOWN_ERROR,
+                    detail=f"HTTP {resp.status_code}",
+                    latency_ms=elapsed,
+                )
         except httpx.ConnectError:
+            elapsed = int((time.monotonic() - start) * 1000)
             logger.error(f"Cannot connect to HA at {self.base_url}")
-            return False
+            return HADiagnostic(
+                url=self.base_url,
+                status=HAStatus.UNREACHABLE,
+                latency_ms=elapsed,
+            )
+        except httpx.ReadTimeout:
+            elapsed = int((time.monotonic() - start) * 1000)
+            logger.error(f"HA health check timed out at {self.base_url}")
+            return HADiagnostic(
+                url=self.base_url,
+                status=HAStatus.TIMEOUT,
+                latency_ms=elapsed,
+            )
         except Exception as e:
+            elapsed = int((time.monotonic() - start) * 1000)
             logger.error(f"HA health check failed: {e}")
-            return False
+            return HADiagnostic(
+                url=self.base_url,
+                status=HAStatus.UNKNOWN_ERROR,
+                detail=str(e),
+                latency_ms=elapsed,
+            )
     
     async def get_states(self) -> List[Dict[str, Any]]:
         """

@@ -247,7 +247,10 @@ async def health():
       - llm_offline: No LLM tier reachable (process will return errors)
     """
     ollama_ok = await llm_client.check_health()
-    ha_ok = await ha_client.check_health() if ha_client.is_configured else False
+    
+    # HA diagnostic (structured)
+    ha_diag = await ha_client.diagnose() if ha_client.is_configured else None
+    ha_ok = ha_diag.ok if ha_diag else False
     
     # Detailed tier info (now includes status enum + human message per tier)
     tier_info = await llm_client.check_health_detailed()
@@ -270,6 +273,8 @@ async def health():
         model=llm_client.local_model,
         ollama_connected=ollama_ok,
         ha_connected=ha_ok,
+        ha_status=ha_diag.status.value if ha_diag else "not_configured",
+        ha_message=ha_diag.message if ha_diag else "Home Assistant is not configured (no API token set)",
         entity_cache_size=entity_validator.cache_size,
         llm_tiers=tier_info,
     )
