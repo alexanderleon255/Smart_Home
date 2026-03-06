@@ -73,17 +73,17 @@ class VoiceLoop:
         """Print key latency metrics for current interaction."""
         if "wake_detected" in self._timings and "tts_start" in self._timings:
             total = self._timings["tts_start"] - self._timings["wake_detected"]
-            print(f"⏱️  Wake→TTS start: {total:.2f}s")
+            print(f"[LATENCY] Wake->TTS start: {total:.2f}s")
         if "stt_start" in self._timings and "stt_end" in self._timings:
             stt = self._timings["stt_end"] - self._timings["stt_start"]
-            print(f"⏱️  STT capture: {stt:.2f}s")
+            print(f"[LATENCY] STT capture: {stt:.2f}s")
         if "llm_start" in self._timings and "llm_end" in self._timings:
             llm = self._timings["llm_end"] - self._timings["llm_start"]
-            print(f"⏱️  LLM+broker: {llm:.2f}s")
+            print(f"[LATENCY] LLM+broker: {llm:.2f}s")
         
     def start(self):
         """Start the voice loop."""
-        print("🎙️  Jarvis voice loop starting...")
+        print("[VOICE] Jarvis voice loop starting...")
         print(f"   State: {self.state.value}")
         print(f"   Chime: {self.chime_path}")
         print()
@@ -95,10 +95,10 @@ class VoiceLoop:
                 self._service.write_status(self.state.value)
                 self._run_iteration()
             except KeyboardInterrupt:
-                print("\n👋 Shutting down...")
+                print("\n[VOICE] Shutting down...")
                 self.running = False
             except Exception as e:
-                print(f"❌ Error in voice loop: {e}")
+                print(f"[ERROR] Error in voice loop: {e}")
                 import traceback
                 traceback.print_exc()
                 self._service.record_error()
@@ -123,10 +123,10 @@ class VoiceLoop:
             
     def _handle_listening(self):
         """Wait for wake word."""
-        print("👂 Listening for wake word...")
+        print("[LISTEN] Waiting for wake word...")
         
         if self.wake_word.wait_for_activation():
-            print("✅ Wake word detected!")
+            print("[LISTEN] Wake word detected")
             self._timings = {}
             self._mark("wake_detected")
             self._transition_to(VoiceState.ATTENDING)
@@ -137,7 +137,7 @@ class VoiceLoop:
         self._play_chime()
         
         # Start STT
-        print("🎤 Listening to user...")
+        print("[STT] Listening to user...")
         self._mark("stt_start")
         self.stt.start_streaming(callback=self._on_stt_chunk)
 
@@ -166,15 +166,15 @@ class VoiceLoop:
         self.user_input = self.stt.transcript.strip()
         
         if self.user_input:
-            print(f"💬 User said: {self.user_input}")
+            print(f"[STT] User said: {self.user_input}")
             self._transition_to(VoiceState.PROCESSING)
         else:
-            print("⚠️  No speech detected, returning to listening")
+            print("[WARN] No speech detected, returning to listening")
             self._transition_to(VoiceState.LISTENING)
             
     def _handle_processing(self):
         """Send query to Jarvis via Tool Broker."""
-        print("🤔 Processing...")
+        print("[LLM] Processing...")
         self._mark("llm_start")
         
         try:
@@ -185,7 +185,7 @@ class VoiceLoop:
             self._service.record_interaction()
             self._transition_to(VoiceState.SPEAKING)
         except Exception as e:
-            print(f"❌ Processing error: {e}")
+            print(f"[ERROR] Processing error: {e}")
             self.response = "I apologize, I encountered an error."
             self._mark("llm_end")
             self._service.record_error()
@@ -193,7 +193,7 @@ class VoiceLoop:
             
     def _handle_speaking(self):
         """Speak response with barge-in monitoring."""
-        print(f"🗣️  Jarvis: {self.response}")
+        print(f"[TTS] Jarvis: {self.response}")
         self._mark("tts_start")
         
         # Start barge-in detection
@@ -206,12 +206,12 @@ class VoiceLoop:
         was_interrupted = self.barge_in.stop_monitoring()
         
         if completed and not was_interrupted:
-            print("✅ Response completed")
+            print("[TTS] Response completed")
             self._print_latency_summary()
             self._transition_to(VoiceState.LISTENING)
         else:
             # Barge-in occurred
-            print("🔔 Response interrupted by barge-in")
+            print("[BARGE-IN] Response interrupted")
             self._print_latency_summary()
             self._transition_to(VoiceState.ATTENDING)
 
@@ -219,11 +219,11 @@ class VoiceLoop:
         """Handle normalized STT chunk events."""
         text = (chunk or {}).get("text", "").strip()
         if text:
-            print(f"📝 STT chunk: {text}")
+            print(f"[STT] Chunk: {text}")
             
     def _transition_to(self, new_state: VoiceState):
         """Transition to new state with logging."""
-        print(f"🔄 State: {self.state.value} → {new_state.value}")
+        print(f"[STATE] {self.state.value} -> {new_state.value}")
         print()
         self.state = new_state
         
@@ -244,7 +244,7 @@ class VoiceLoop:
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             # Fallback: just print
-            print("🔔 (chime)")
+            print("[CHIME]")
 
 
 def main():

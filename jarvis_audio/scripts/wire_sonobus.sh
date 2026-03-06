@@ -13,7 +13,9 @@
 #
 # Usage:
 #   ./jarvis_audio/scripts/wire_sonobus.sh
-set -euo pipefail
+# Do not use `-e`: many probes intentionally return no-match when ports are absent.
+# This script should be best-effort and never fail service startup for optional links.
+set -uo pipefail
 
 echo "Discovering SonoBus ports..."
 echo ""

@@ -8,7 +8,7 @@ from pathlib import Path
 class WakeWordDetector:
     """Wrapper around jarvis_audio.wake_word.WakeWordDetector."""
     
-    def __init__(self, model_name: str = "hey_jarvis", threshold: float = 0.6):
+    def __init__(self, model_name: str = "hey_jarvis", threshold: float = 0.35):
         """Initialize wake word detector.
         
         Args:
@@ -24,6 +24,7 @@ class WakeWordDetector:
             threshold=threshold
         )
         self._activated = False
+        self._barge_in_active = False
         
     def wait_for_activation(self) -> bool:
         """Block until wake word is detected.
@@ -41,6 +42,10 @@ class WakeWordDetector:
         while not self._activated:
             import time
             time.sleep(0.1)
+
+        # Ensure background capture is stopped after activation.
+        self._detector.stop_listening()
+        self._barge_in_active = False
             
         return True
         
@@ -50,28 +55,23 @@ class WakeWordDetector:
         Returns:
             True if wake word detected in current audio frame
         """
-        # For barge-in, we need a non-blocking check
-        # This is a simplified implementation
-        import time
-        import numpy as np
-        
+        # Subprocess-based detector has no direct stream.read API.
+        # Start a background listener once per speaking turn and poll the flag.
         try:
-            if hasattr(self._detector, 'stream') and self._detector.stream:
-                # Read one chunk from the stream
-                audio_data = self._detector.stream.read(
-                    self._detector.chunk_size,
-                    exception_on_overflow=False
-                )
-                audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-                
-                # Run prediction
-                prediction = self._detector.model.predict(audio_array)
-                
-                # Check if any model exceeded threshold
-                for model_name, score in prediction.items():
-                    if score >= self._detector.threshold:
-                        return True
+            if not self._barge_in_active:
+                self._activated = False
+                self._detector.start_listening(self._on_barge_in_activation)
+                self._barge_in_active = True
+
+            if self._activated:
+                self._activated = False
+                self._barge_in_active = False
+                return True
         except Exception:
-            pass
-            
+            return False
+
         return False
+
+    def _on_barge_in_activation(self):
+        """Internal callback for barge-in polling mode."""
+        self._activated = True

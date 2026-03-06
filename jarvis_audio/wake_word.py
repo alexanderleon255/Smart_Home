@@ -2,9 +2,7 @@
 
 import os
 import subprocess
-import struct
 import threading
-import time
 import numpy as np
 from typing import Callable, Optional
 
@@ -22,7 +20,7 @@ class WakeWordDetector:
     def __init__(
         self,
         model_name: str = "hey_jarvis",
-        threshold: float = 0.6,
+        threshold: float = 0.35,
         sample_rate: int = 16000,
         chunk_size: int = 1280,
         audio_device: str = "jarvis-mic-source",
@@ -40,10 +38,12 @@ class WakeWordDetector:
             raise ImportError("openWakeWord not installed")
         
         self.model_name = model_name
-        self.threshold = threshold
+        env_threshold = os.environ.get("JARVIS_WAKE_THRESHOLD")
+        self.threshold = float(env_threshold) if env_threshold else threshold
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
         self.audio_device = audio_device
+        self.debug = os.environ.get("JARVIS_WAKE_DEBUG", "0") == "1"
         
         # Load wake word model (openwakeword defaults to built-in models)
         self.model = Model()
@@ -94,11 +94,12 @@ class WakeWordDetector:
                 bufsize=self.chunk_size * 2,  # 2 bytes per int16 sample
             )
             
-            print(f"🎤 Listening on PipeWire device: {self.audio_device}")
+            print(f"[WAKE] Listening on PipeWire device: {self.audio_device}")
             print(f"   Sample rate: {self.sample_rate} Hz, chunk size: {self.chunk_size}")
             
             # Read chunks of audio data
             byte_size = self.chunk_size * 2  # 2 bytes per int16
+            chunk_count = 0
             while self._listening and self._record_process:
                 try:
                     chunk_bytes = self._record_process.stdout.read(byte_size)
@@ -113,22 +114,28 @@ class WakeWordDetector:
                     
                     # Get predictions from wake word model
                     predictions = self.model.predict(audio_data)
+                    chunk_count += 1
+
+                    if self.debug and chunk_count % 25 == 0:
+                        peak = int(np.max(np.abs(audio_data))) if audio_data.size else 0
+                        hj_score = float(predictions.get(self.model_name, 0.0))
+                        print(f"[WAKE][DEBUG] chunks={chunk_count} peak={peak} {self.model_name}={hj_score:.4f}")
                     
                     # Check if any wake word detected
                     for word, score in predictions.items():
                         if score >= self.threshold:
-                            print(f"✅ Wake word '{word}' detected! Confidence: {score:.2f}")
+                            print(f"[WAKE] Wake word '{word}' detected. Confidence: {score:.2f}")
                             self._listening = False
                             callback()
                             return
                             
                 except Exception as e:
                     if self._listening:
-                        print(f"⚠️  Audio read error: {e}")
+                        print(f"[WAKE][WARN] Audio read error: {e}")
                     break
                     
         except Exception as e:
-            print(f"❌ Failed to start listening: {e}")
+            print(f"[WAKE][ERROR] Failed to start listening: {e}")
             print(f"   Make sure pw-record is available and {self.audio_device} exists")
         finally:
             self.stop_listening()
