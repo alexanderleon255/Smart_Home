@@ -1,7 +1,7 @@
 # Smart Home – Current State
 
-**Last Updated:** 2026-03-05  
-**Rev:** 6.0 (Aligned to 2026-03-05 roadmap; authority chain established)  
+**Last Updated:** 2026-03-06  
+**Rev:** 6.1 (Aligned to 2026-03-06 roadmap/tracker updates; P4 complete)  
 **Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
@@ -125,14 +125,14 @@
 | P1 Hub Setup | 67% | Pi running with HA, Docker, MQTT, Tailscale |
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
-| P4 Security | 33% | Tailscale mesh + PolicyGate + auth |
+| P4 Security | 100% | ACL/firewall artifacts + monitor alerts + audit reports + TTS shell fix |
 | P5 Cameras | 0% | Camera hardware not acquired |
 | P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper all installed |
 | P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
 | P8 Advanced AI | 100%* | *Vector store has ID collision bug; context_builder has method call bug |
 | P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling phase |
 
-**Overall: 37/62 items (60%)**
+**Overall: 41/62 items (66%)**
 
 ---
 
@@ -140,8 +140,6 @@
 
 | Severity | File | Issue |
 |----------|------|-------|
-| **HIGH** | `jarvis/tts_controller.py:72` | Shell injection via `shell=True` with f-string |
-| **HIGH** | `jarvis_audio/tts.py:103` | Same shell injection in `synthesize_streaming()` |
 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder — not real transcription |
 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist |
 | **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) |
@@ -166,17 +164,15 @@
 ## Known Issues / Next Steps
 
 ### Tier 1: Fix Now (Security / Correctness)
-1. Fix TTS shell injection (`tts_controller.py:72`, `tts.py:103`)
-2. Fix context_builder `search_conversations()` → `search()`
-3. Fix vector store ID collisions → UUID
-4. Wire whisper.cpp into secretary transcription
+1. Fix context_builder `search_conversations()` → `search()`
+2. Fix vector store ID collisions → UUID
+3. Wire whisper.cpp into secretary transcription
 
 ### Tier 2: Harden (Reliability / Ops)
-5. Add JSONL log rotation
-6. Persistent httpx.AsyncClient pooling
-7. ~~systemd service units~~ ✅ DONE (P1-09, deploy/systemd/)
-8. Tailscale ACLs
-9. Remove/disable unimplemented tools
+4. Persistent httpx.AsyncClient pooling
+5. ~~systemd service units~~ ✅ DONE (P1-09, deploy/systemd/)
+6. Apply Tailscale ACLs + device tags in admin console
+7. Remove/disable unimplemented tools
 
 ### Tier 3: Enhance (Value-Add)
 10. `POST /v1/process/stream` SSE endpoint

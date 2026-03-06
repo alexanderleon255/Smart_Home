@@ -41,6 +41,7 @@ class InterruptibleTTS:
         """
         self.voice = voice
         self._process: Optional[subprocess.Popen] = None
+        self._piper_process: Optional[subprocess.Popen] = None
         self._lock = threading.Lock()
         
     def speak(self, text: str) -> bool:
@@ -54,44 +55,71 @@ class InterruptibleTTS:
             True if speech completed, False if interrupted
         """
         with self._lock:
-            # Escape quotes in text
-            safe_text = text.replace('"', '\\"')
-            
-            # Start piper → paplay pipeline (resolved paths)
-            # Route TTS audio to the jarvis-tts-sink virtual device so
-            # SonoBus can pick it up and relay to AirPods.
             model_path = _resolve_model(self.voice)
             sink = os.environ.get("JARVIS_TTS_SINK", "jarvis-tts-sink")
-            cmd = (
-                f'echo "{safe_text}" | {_PIPER_BIN} --model {model_path} --output_raw | '
-                f'PULSE_SINK={sink} ffplay -f s16le -ar 22050 -ch_layout mono '
-                f'-autoexit -nodisp - 2>/dev/null'
+            ffplay_env = dict(os.environ)
+            ffplay_env["PULSE_SINK"] = sink
+
+            self._piper_process = subprocess.Popen(
+                [_PIPER_BIN, "--model", model_path, "--output_raw"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=os.setsid,
             )
-            
+
             self._process = subprocess.Popen(
-                cmd,
-                shell=True,
+                [
+                    "ffplay",
+                    "-f", "s16le",
+                    "-ar", "22050",
+                    "-ch_layout", "mono",
+                    "-autoexit",
+                    "-nodisp",
+                    "-",
+                ],
+                stdin=self._piper_process.stdout,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                preexec_fn=os.setsid  # Create new process group for clean kill
+                env=ffplay_env,
+                preexec_fn=os.setsid,
             )
+
+            if self._piper_process.stdout:
+                self._piper_process.stdout.close()
+
+            try:
+                if self._piper_process.stdin:
+                    self._piper_process.stdin.write(text.encode())
+                    self._piper_process.stdin.close()
+            except BrokenPipeError:
+                self.interrupt()
+                return False
         
         # Wait for completion
         returncode = self._process.wait()
+        if self._piper_process:
+            try:
+                self._piper_process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self._piper_process.terminate()
         
         with self._lock:
             interrupted = returncode != 0
             self._process = None
+            self._piper_process = None
             return not interrupted
             
     def interrupt(self):
         """Stop current speech immediately."""
         with self._lock:
+            pids = [p for p in (self._process, self._piper_process) if p]
             if self._process:
                 try:
-                    # Kill entire process group to stop all pipeline components
-                    os.killpg(os.getpgid(self._process.pid), signal.SIGTERM)
+                    for proc in pids:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                 except (ProcessLookupError, AttributeError):
-                    pass  # Process already terminated
+                    pass
                 finally:
                     self._process = None
+                    self._piper_process = None

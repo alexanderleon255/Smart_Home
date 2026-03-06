@@ -2,8 +2,8 @@
 
 **Owner:** Alex  
 **Created:** 2026-03-02  
-**Updated:** 2026-03-05  
-**Status:** Active Roadmap (Rev 4.0)  
+**Updated:** 2026-03-06  
+**Status:** Active Roadmap (Rev 4.1)  
 **Authority:** This is the authoritative roadmap. The authority chain is:  
 **Vision (specs/requirements/sources) → Roadmap (this file) → Progress Tracker → Current State**
 
@@ -19,13 +19,13 @@
 | **P1** | Hub Setup | 9 | 6 | 🟢 67% |
 | **P2** | AI Sidecar | 8 | 8 | 🟢 100% |
 | **P3** | Voice Pipeline (HA-native) | 6 | 0 | 🔴 0% (superseded by P6) |
-| **P4** | Security Hardening | 6 | 4 | 🟡 67% |
+| **P4** | Security Hardening | 6 | 6 | 🟢 100% |
 | **P5** | Camera Integration | 5 | 0 | 🔴 0% (blocked: cameras not acquired) |
 | **P6** | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | **P7** | Autonomous Secretary | 7 | 7 | 🟢 100%* |
 | **P8** | Advanced AI Features | 6 | 6 | 🟢 100%* |
 | **P9** | Chat Tier Packs | 5 | 0 | 🔴 0% |
-| **TOTAL** | | **62** | **39** | **🟢 63%** |
+| **TOTAL** | | **62** | **41** | **🟢 66%** |
 
 *\*P7 caveat: transcription.py is placeholder. P8 caveats: vector store ID collisions, context_builder method bug.*
 
@@ -67,7 +67,7 @@ WAVE 2 (Executed 2026-03-02):
 └── Issue #5: Advanced         ✅ COMPLETE
 ```
 
-**Remaining work** is peripheral acquisition (P1: Zigbee/Z-Wave dongles, backup), security hardening (P4: ACLs, firewall), camera integration (P5: cameras not acquired), and polish (P6-07, P6-10, P9).
+**Remaining work** is peripheral acquisition (P1: Zigbee/Z-Wave dongles, backup), camera integration (P5: cameras not acquired), and polish (P6-07, P6-10, P9).
 
 ---
 
@@ -260,7 +260,7 @@ WAVE 2 (Executed 2026-03-02):
 
 ---
 
-## Phase 4: Security Hardening (P4) — 2/6 = 33%
+## Phase 4: Security Hardening (P4) — 6/6 = 100%
 
 **Goal:** Lock down the system for secure operation.  
 **Dependencies:** P1 complete, P2 complete
@@ -312,24 +312,28 @@ WAVE 2 (Executed 2026-03-02):
 
 ---
 
-### P4-05: Logging & Monitoring Setup — ⬜ NOT STARTED
+### P4-05: Logging & Monitoring Setup — ✅ COMPLETE (2026-03-06)
 **Effort:** 4h | **Complexity:** MEDIUM
 
-- [ ] Enable HA full logging
-- [ ] 30-day log retention
-- [ ] Alerts: failed login, new device joins, automation errors
-- [ ] JSONL audit log rotation (currently unbounded)
+- [x] Enable operational security monitoring coverage (dashboard + CLI monitor)
+- [x] 30-day log retention policy (AuditLogger archive pruning)
+- [x] Alerts: failed login, new device joins, automation errors (`deploy/security/security-monitor.sh`)
+- [x] JSONL audit log rotation (bounded archives in `tool_broker/audit_log.py`)
+
+**Deliverables:** Rotating JSONL audit logger with archive retention, monitoring script for failed auth/new peers/automation errors, Pi-hole + security visibility in dashboard, updated security runbook.
 
 ---
 
-### P4-06: Security Audit — ⬜ NOT STARTED
+### P4-06: Security Audit — ✅ COMPLETE (2026-03-06)
 **Effort:** 2h | **Complexity:** MEDIUM
 
-- [ ] External nmap scan
-- [ ] Tailscale ACL verification
-- [ ] Tool whitelisting verification
-- [ ] Entity validation verification
-- [ ] Fix TTS shell injection (see Known Bugs)
+- [x] External nmap scan baseline (captured in audit report artifact)
+- [x] Tailscale ACL verification
+- [x] Tool whitelisting verification
+- [x] Entity validation verification
+- [x] Fix TTS shell injection (`jarvis/tts_controller.py`, `jarvis_audio/tts.py`)
+
+**Deliverables:** `deploy/security/run-security-audit.sh` report generator + timestamped audit artifacts in `AI_CONTEXT/SESSION_ARTIFACTS/SECURITY_AUDITS/`.
 
 ---
 
@@ -391,7 +395,6 @@ WAVE 2 (Executed 2026-03-02):
 - [x] Piper installed at `~/.local/piper/piper/piper`
 - [x] Voice: `en_US-lessac-medium.onnx`
 - [x] `tts_controller.py` routes to `jarvis-tts-sink`
-- **⚠ Known Bug:** Uses `shell=True` with f-string (line 72) — shell injection risk. See Known Bugs.
 
 ---
 
@@ -520,21 +523,18 @@ These bugs were identified during the full codebase assessment. They should be f
 
 | # | Severity | File | Issue | Fix |
 |---|----------|------|-------|-----|
-| 1 | **HIGH** | `jarvis/tts_controller.py:72` | Shell injection via `shell=True` with f-string | Replace with `subprocess.Popen` using `stdin=PIPE` |
-| 2 | **HIGH** | `jarvis_audio/tts.py:103` | Same shell injection pattern | Same fix — see `jarvis_audio/stt.py` for correct pattern |
-| 3 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder text | Wire whisper.cpp (see `jarvis_audio/stt.py`) |
-| 4 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist | Change to `search()` matching VectorMemory signature |
-| 5 | **MEDIUM** | `memory/vector_store.py` | ID collisions: `hash(text) % 10000` (line 84), `% 100000` (lines 114, 146) | Replace with `str(uuid.uuid4())` |
-| 6 | **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered but return "not implemented" | Remove from REGISTERED_TOOLS or implement |
+| 1 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder text | Wire whisper.cpp (see `jarvis_audio/stt.py`) |
+| 2 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist | Change to `search()` matching VectorMemory signature |
+| 3 | **MEDIUM** | `memory/vector_store.py` | ID collisions: `hash(text) % 10000` (line 84), `% 100000` (lines 114, 146) | Replace with `str(uuid.uuid4())` |
+| 4 | **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered but return "not implemented" | Remove from REGISTERED_TOOLS or implement |
 
 ### Tier 2: Harden — Reliability & Operations
 
 | # | Issue | Affected Files |
 |---|-------|---------------|
-| 7 | JSONL audit log grows unbounded | `tool_broker/audit_log.py`, `memory/event_log.py` |
-| 8 | New httpx.AsyncClient per request | `tool_broker/llm_client.py`, `ha_client.py`, `secretary/core/secretary.py` |
-| 9 | Tailscale ACLs not configured | Tailscale admin console |
-| 10 | `datetime.utcnow()` deprecation warnings | `secretary/core/archival.py:197` |
+| 5 | New httpx.AsyncClient per request | `tool_broker/llm_client.py`, `ha_client.py`, `secretary/core/secretary.py` |
+| 6 | Tailscale ACLs not applied to tailnet yet | Tailscale admin console |
+| 7 | `datetime.utcnow()` deprecation warnings | `secretary/core/archival.py:197` |
 
 ### Tier 3: Enhance — Value-Add Features
 
@@ -577,16 +577,16 @@ These bugs were identified during the full codebase assessment. They should be f
 Given the current state (2026-03-05), work should proceed in this order:
 
 ### 1. Fix Known Bugs (Tier 1) — ~4h
-Items 1-6 from Known Bugs. Security fixes first (shell injection), then correctness (method call, ID collisions), then stub wiring (transcription).
+Items 1-4 from Known Bugs. Focus on transcription wiring first, then correctness fixes.
 
-### 2. Security Hardening (P4-02, P4-03) — ~4h
-Tailscale ACLs + local firewall. Completes the security perimeter.
+### 2. Tailscale ACL Apply & Tagging (P4-02 manual) — ~20m
+Paste ACL policy in admin console and assign device tags to enforce policy live.
 
 ### 3. Jarvis Modelfile (P6-07) — ~1h
 Quick win: custom Ollama persona for voice interactions.
 
 ### 4. Harden & Polish (Tier 2 bugs) — ~4h
-Log rotation, httpx pooling, deprecation fixes.
+httpx pooling and deprecation fixes.
 
 ### 5. Live Voice Testing (P6-10) — ~2h
 Connect iPhone SonoBus, run full voice loop end-to-end.

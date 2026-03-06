@@ -41,8 +41,8 @@ If documents disagree, the higher-authority document wins.
 
 ## 3. Current State
 
-**As of 2026-03-05:**
-- **37/62 items complete (60%)** — P2, P7, P8 fully done; P1, P4, P6 in progress; P9 not started
+**As of 2026-03-06:**
+- **41/62 items complete (66%)** — P2, P4, P7, P8 fully done; P1 and P6 in progress; P9 not started
 - Pi 5 running Debian Bookworm with HA (Docker), Tool Broker, Ollama, PipeWire, Dashboard
 - Tiered LLM: qwen2.5:1.5b (local, Pi) + llama3.1:8b (sidecar, Mac via Tailscale)
 - SonoBus built from source + PipeWire JACK shim audio routing

@@ -21,6 +21,8 @@ Three layers of network security:
 | `setup-firewall-pi.sh` | UFW firewall setup for Pi 5 | Pi 5 (`sudo`) |
 | `setup-firewall-mac.sh` | pf + Application Firewall for Mac M1 | Mac (`sudo`) |
 | `verify-security.sh` | Verify security posture from any device | Any host |
+| `security-monitor.sh` | Alert checks (failed logins, new peers, HA automation errors) | Pi 5 / Mac |
+| `run-security-audit.sh` | P4-06 audit report generation with verifications | Any host |
 
 ## Port Inventory
 
@@ -122,7 +124,7 @@ Pi-hole is deployed via Docker Compose on the Pi and provides network-wide ad/tr
 ### Access
 
 - **Web Admin:** http://100.83.1.2:8080/admin (Tailscale) or http://192.168.0.189:8080/admin (LAN)
-- **Admin Password:** `lFaYy2wS` (stored in Docker logs: `docker logs pihole | grep password`)
+- **Admin Password:** managed at runtime (`WEBPASSWORD` env or Pi-hole web UI). Do not store in Git.
 
 ### How It Works
 
@@ -138,6 +140,26 @@ The Dashboard includes a live Pi-hole status panel showing:
 - Ads/trackers blocked today  
 - Block rate percentage
 - **Device alerts:** If known devices (printer, IoT) get blocked
+
+CLI monitoring checks:
+
+```bash
+./deploy/security/security-monitor.sh
+```
+
+This script alerts on:
+- Unauthorized/forbidden Tool Broker requests (401/403)
+- New Tailscale peer joins since last baseline
+- Home Assistant automation/script error patterns
+
+Roadmap P4-06 audit artifact:
+
+```bash
+./deploy/security/run-security-audit.sh
+```
+
+This generates timestamped reports under:
+`AI_CONTEXT/SESSION_ARTIFACTS/SECURITY_AUDITS/`
 
 ### Configuration
 

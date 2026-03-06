@@ -138,6 +138,8 @@ check_pi_services() {
         [8123]="Home Assistant"
         [8000]="Tool Broker"
         [8050]="Dashboard"
+        [8080]="Pi-hole Admin"
+        [53]="Pi-hole DNS"
         [11434]="Ollama"
         [22]="SSH"
     )

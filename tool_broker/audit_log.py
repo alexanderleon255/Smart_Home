@@ -10,7 +10,7 @@ Log file: ~/hub_memory/audit_log.jsonl
 import json
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional
@@ -40,11 +40,60 @@ class AuditLogger:
       - tool_calls    (number of tool calls in response)
     """
 
-    def __init__(self, log_file: str = DEFAULT_LOG_PATH, max_summary_len: int = 500):
+    def __init__(
+        self,
+        log_file: str = DEFAULT_LOG_PATH,
+        max_summary_len: int = 500,
+        rotate_max_bytes: int = 5 * 1024 * 1024,
+        retention_days: int = 30,
+        max_archives: int = 120,
+    ):
         self.log_file = Path(log_file).expanduser()
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
         self._max_summary_len = max_summary_len
+        self._rotate_max_bytes = rotate_max_bytes
+        self._retention_days = retention_days
+        self._max_archives = max_archives
+
+    def _archive_glob(self) -> str:
+        return f"{self.log_file.stem}.*{self.log_file.suffix}"
+
+    def _rotate_if_needed(self) -> None:
+        if not self.log_file.exists():
+            return
+        if self.log_file.stat().st_size < self._rotate_max_bytes:
+            return
+
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        archive = self.log_file.with_name(f"{self.log_file.stem}.{ts}{self.log_file.suffix}")
+        self.log_file.replace(archive)
+        self._enforce_retention()
+
+    def _enforce_retention(self) -> None:
+        archives = sorted(
+            self.log_file.parent.glob(self._archive_glob()),
+            key=lambda p: p.stat().st_mtime,
+        )
+
+        if not archives:
+            return
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
+        cutoff_ts = cutoff.timestamp()
+
+        for archive in list(archives):
+            if archive.stat().st_mtime < cutoff_ts:
+                archive.unlink(missing_ok=True)
+
+        archives = sorted(
+            self.log_file.parent.glob(self._archive_glob()),
+            key=lambda p: p.stat().st_mtime,
+        )
+        overflow = len(archives) - self._max_archives
+        if overflow > 0:
+            for archive in archives[:overflow]:
+                archive.unlink(missing_ok=True)
 
     @staticmethod
     def generate_request_id() -> str:
@@ -84,6 +133,7 @@ class AuditLogger:
             entry["extra"] = extra
 
         with self._lock:
+            self._rotate_if_needed()
             with self.log_file.open("a") as fh:
                 fh.write(json.dumps(entry, default=str) + "\n")
 

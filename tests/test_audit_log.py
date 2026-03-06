@@ -111,3 +111,36 @@ class TestAuditLogger:
         al = AuditLogger(tmp_log)
         stats = al.stats()
         assert stats["total_requests"] == 0
+
+    def test_log_rotation_creates_archive(self, tmp_path):
+        log_path = tmp_path / "audit.jsonl"
+        al = AuditLogger(str(log_path), rotate_max_bytes=300)
+
+        for i in range(30):
+            al.log_request(
+                request_id=f"rot-{i}",
+                endpoint="/v1/process",
+                input_summary="x" * 50,
+                output_summary="y" * 50,
+            )
+
+        archives = list(tmp_path.glob("audit.*.jsonl"))
+        assert len(archives) >= 1
+        assert log_path.exists()
+
+    def test_retention_prunes_old_archives(self, tmp_path):
+        log_path = tmp_path / "audit.jsonl"
+        al = AuditLogger(str(log_path), retention_days=1, max_archives=10)
+
+        old_archive = tmp_path / "audit.20000101T000000Z.jsonl"
+        old_archive.write_text("{}\n")
+        very_old_ts = 946684800  # 2000-01-01
+        os.utime(old_archive, (very_old_ts, very_old_ts))
+
+        recent_archive = tmp_path / "audit.20990101T000000Z.jsonl"
+        recent_archive.write_text("{}\n")
+
+        al._enforce_retention()
+
+        assert not old_archive.exists()
+        assert recent_archive.exists()

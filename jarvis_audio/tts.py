@@ -66,7 +66,7 @@ class PiperTTS:
         
         result = subprocess.run(
             cmd,
-            input=text,
+            input=text.encode(),
             capture_output=True,
             text=False,
         )
@@ -93,21 +93,47 @@ class PiperTTS:
             if candidate.exists():
                 model_arg = str(candidate)
 
-        cmd = (
-            f'{self.piper_path} --model {model_arg} --output-raw | '
-            f'ffplay -f s16le -ar {self.sample_rate} -ch_layout mono '
-            f'-nodisp -autoexit - 2>/dev/null'
-        )
-        
-        process = subprocess.Popen(
-            cmd,
-            shell=True,
+        ffplay_env = dict(os.environ)
+        if audio_output and audio_output != "default":
+            ffplay_env["PULSE_SINK"] = audio_output
+
+        piper_proc = subprocess.Popen(
+            [
+                str(self.piper_path),
+                "--model", model_arg,
+                "--output_raw",
+            ],
             stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        ffplay_proc = subprocess.Popen(
+            [
+                "ffplay",
+                "-f", "s16le",
+                "-ar", str(self.sample_rate),
+                "-ch_layout", "mono",
+                "-nodisp",
+                "-autoexit",
+                "-",
+            ],
+            stdin=piper_proc.stdout,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=ffplay_env,
         )
-        
-        process.communicate(input=text.encode())
+
+        if piper_proc.stdout:
+            piper_proc.stdout.close()
+
+        _, stderr = piper_proc.communicate(input=text.encode())
+        ffplay_return = ffplay_proc.wait()
+
+        if piper_proc.returncode != 0:
+            raise RuntimeError(f"Piper failed: {stderr.decode() if stderr else 'unknown error'}")
+        if ffplay_return != 0:
+            raise RuntimeError(f"ffplay failed with exit code {ffplay_return}")
 
 
 def main():
