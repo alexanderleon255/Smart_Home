@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-02  
 **Last Updated:** 2026-03-06  
-**Status:** Active (Rev 8.1 — P4 fully complete with monitoring, audit artifacts, and shell-injection fixes)  
+**Status:** Active (Rev 9.0 — P6-07 Modelfile done; P7-03 process_audio_file() wired; tools cleaned up; P8 caveats resolved)  
 **Authority:** Vision/specs → Roadmap → **This Tracker** → Current State  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
@@ -17,14 +17,14 @@
 | P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
 | P4 | Security Hardening | 6 | 6 | 🟢 100% |
 | P5 | Camera Integration | 5 | 0 | 🔴 0% |
-| P6 | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
+| P6 | Jarvis Real-Time Voice | 10 | 9 | 🟢 90% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
 | P9 | Chat Tier Packs | 5 | 0 | 🔴 0% |
-| **TOTAL** | | **62** | **41** | **🟡 66%** |
+| **TOTAL** | | **62** | **42** | **🟡 68%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
-**Tests:** 248 passing (pytest, ~26s)  
+**Tests:** 249 passing (pytest, ~26s)  
 **Code:** 12,968 LOC (9,582 source + 3,386 test) across 11 packages  
 **Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi  
 **Assessment Grade:** B+ (2026-03-04 full codebase review)
@@ -126,12 +126,12 @@
 | P6-04 | Wake Word Detection | ✅ COMPLETE | 2026-03-02 | wake_word_detector.py with openWakeWord |
 | P6-05 | Streaming STT (whisper.cpp) | ✅ COMPLETE | 2026-03-04 | Built from source; stt_client.py reads from jarvis-mic-source |
 | P6-06 | Streaming TTS (Piper) | ✅ COMPLETE | 2026-03-04 | Piper installed; tts_controller.py routes to jarvis-tts-sink |
-| P6-07 | Jarvis Modelfile Creation | ⬜ NOT STARTED | - | |
+| P6-07 | Jarvis Modelfile Creation | ✅ COMPLETE | 2026-03-06 | DEC-008 format (text + tool_calls array); 3 HA tools; examples updated |
 | P6-08 | Barge-In Implementation | ✅ COMPLETE | 2026-03-02 | barge_in.py module |
 | P6-09 | Voice Loop Integration | ✅ COMPLETE | 2026-03-02 | voice_loop.py state machine + latency instrumentation |
 | P6-10 | Jarvis Voice Testing | ⬜ NOT STARTED | - | Needs live SonoBus peer (iPhone app) |
 
-**Phase 6 Status:** 🟢 80%
+**Phase 6 Status:** 🟢 90%
 - SonoBus built from source for aarch64 (25MB binary at /usr/local/bin/sonobus)
 - PipeWire replaces BlackHole (macOS-only) with virtual audio devices
 - SonoBus -> PipeWire routing via LD_LIBRARY_PATH JACK shim (key discovery)
@@ -140,7 +140,8 @@
 - All code updated for Linux (pulse audio format, correct binary paths, env-driven config)
 - Launch script: jarvis_audio/scripts/launch_jarvis_audio.sh
 - Wiring script: jarvis_audio/scripts/wire_sonobus.sh (handles HDMI disconnect)
-- Remaining: Jarvis Modelfile + live voice testing with iPhone SonoBus app
+- Jarvis Modelfile: DEC-008 format with 3 HA tools (commit 0dee927)
+- Remaining: live voice testing with iPhone SonoBus app (P6-10)
 
 ---
 
@@ -148,15 +149,15 @@
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P7-01 | Live Transcription Pipeline | ✅ COMPLETE | 2026-03-02 | Core implementation with whisper.cpp placeholder |
+| P7-01 | Live Transcription Pipeline | ✅ COMPLETE | 2026-03-02 | start_streaming() wired to real whisper.cpp via asyncio (commit 67efd8f) |
 | P7-02 | Live Secretary Engine | ✅ COMPLETE | 2026-03-02 | Llama-based note extraction with structured output |
-| P7-03 | High-Accuracy Post-Processing | ✅ COMPLETE | 2026-03-02 | High-accuracy transcription pass implemented |
+| P7-03 | High-Accuracy Post-Processing | ✅ COMPLETE | 2026-03-06 | process_audio_file() wired to real whisper.cpp via asyncio; model-path derivation with fallback (commit 0dee927) |
 | P7-04 | Final Notes Generation | ✅ COMPLETE | 2026-03-02 | Comprehensive session summary generation |
 | P7-05 | Memory Update Generation | ✅ COMPLETE | 2026-03-02 | Structured memory extraction with retention policies |
 | P7-06 | Session Archival System | ✅ COMPLETE | 2026-03-02 | Directory structure, indexing, retention policy |
 | P7-07 | Automation Hook Detection | ✅ COMPLETE | 2026-03-02 | Trigger phrase detection and actionable item generation |
 
-**Phase 7 Status:** ✅ **COMPLETE** (with caveat: P7-01 transcription.py is a placeholder returning hardcoded text — needs whisper.cpp wiring)
+**Phase 7 Status:** ✅ **COMPLETE** — both start_streaming() and process_audio_file() wired to real whisper.cpp
 
 ---
 
@@ -171,7 +172,7 @@
 | P8-05 | AI Camera Inference | ✅ COMPLETE | 2026-03-02 | camera processor module |
 | P8-06 | Behavioral Pattern Detection | ✅ COMPLETE | 2026-03-02 | behavioral learner module |
 
-**Phase 8 Status:** ✅ **COMPLETE** (with caveats: vector store has ID collision bug via hash(text)%10000; context_builder calls nonexistent search_conversations() method)
+**Phase 8 Status:** ✅ **COMPLETE** — ID collision bug fixed (UUID4), search_conversations() → search() fixed (commit 8769d5f)
 
 ---
 
@@ -199,7 +200,7 @@
 | DEC-004 | Web Search | Local SearXNG, DuckDuckGo API | ⬜ PENDING | - |
 | DEC-005 | Camera Model | Reolink, Amcrest, Ubiquiti | ⬜ PENDING | - |
 | DEC-006 | Whisper Model Size | base.en (current) | ✅ DECIDED | base.en |
-| DEC-007 | Vector Database | ChromaDB, manual embeddings | ⬜ PENDING | - |
+| DEC-007 | Vector Database | ChromaDB, manual embeddings | ✅ DECIDED | ChromaDB |
 
 ---
 
@@ -227,6 +228,7 @@
 | 2026-03-05 | Security hardening | P4-02, P4-03 | Tailscale ACL policy (5 tiers, 10+ test assertions); Pi UFW script (7 port rules, Docker compat, SSH rate limit); Mac pf script (Ollama-only); verification script; security README; bootstrap.sh updated; 248 tests passing |
 | 2026-03-06 | Pi-hole + Dashboard UX | P4-03 (firewall), P4-05 (partial) | Pi-hole deployed via Docker Compose (web 8080, DNS 53); Dashboard enhanced with educational status messages, Pi-hole monitoring panel (queries/blocks/alerts), device block warnings (printer/IoT detection); Firewall updated to allow Pi-hole ports; SSH key pair created (id_smarthome_pi) for passwordless Pi access; ssh-config-snippet + security README updated. |
 | 2026-03-06 | P4 closure sweep | P4-05, P4-06 | Added audit log rotation + 30-day retention in `tool_broker/audit_log.py`; added `deploy/security/security-monitor.sh` alerts (failed auth, new peers, automation errors); added `deploy/security/run-security-audit.sh` with timestamped reports; fixed TTS shell injection in `jarvis/tts_controller.py` and `jarvis_audio/tts.py`; targeted tests passing (21/21). |
+| 2026-03-06 | Deferred-tool removal + P7-03 + P6-07 | P6-07, P7-03 | Removed web_search + create_reminder from REGISTERED_TOOLS and dead main.py branches; updated 4 tests; implemented process_audio_file() with real whisper.cpp asyncio subprocess + model-path derivation; rewrote Modelfile.jarvis to DEC-008 format (text + tool_calls array, 3 HA tools); fixed DEC-007 tracker (ChromaDB decided, in use); 249 tests passing (commits 67efd8f, 0dee927). |
 
 ---
 
