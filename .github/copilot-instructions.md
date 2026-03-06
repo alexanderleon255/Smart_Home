@@ -113,7 +113,7 @@ State changes flow: User Input → API → Store → Dependent Logic → Respons
 |-------------|-----------|
 | Architecture overview | `AI_CONTEXT/SOURCES/vision_document.md` |
 | Current progress | `AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md` |
-| Implementation plan | `AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-02_smart_home_master_roadmap.md` |
+| Implementation plan | `AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md` |
 | Security concerns | `References/Smart_Home_Threat_Model_Analysis_Rev_1_0.md` |
 | Phase checklists | `AI_CONTEXT/SESSION_ARTIFACTS/CHECKLISTS/phase*_checklist.md` |
 | Tool definitions | `AI_CONTEXT/LLM_RUNTIME/tool_definitions.json` |

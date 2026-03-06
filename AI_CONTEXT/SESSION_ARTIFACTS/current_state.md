@@ -1,7 +1,9 @@
 # Smart Home – Current State
 
 **Last Updated:** 2026-03-05  
-**Rev:** 5.0 (Systemd deploy, diagnostic patterns, dashboard chat visibility)
+**Rev:** 6.0 (Aligned to 2026-03-05 roadmap; authority chain established)  
+**Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
+**Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
 ---
 
@@ -44,7 +46,7 @@
 - **Graceful failure system:** TierStatus enum (7 states: CONNECTED, NOT_CONFIGURED, UNREACHABLE, TIMEOUT, MODEL_MISSING, PARSE_ERROR, UNKNOWN_ERROR)
 - **Per-tier diagnostics:** TierDiagnostic dataclass with human-readable error messages
 - **Health endpoint:** `GET /v1/health` returns 3-state status (ok/degraded/llm_offline) with per-tier status+message
-- **Entity cache:** 48 Home Assistant entities validated
+- **Entity cache:** 48 Home Assistant entities validated (live runtime cache; `entity_registry.json` is a placeholder with 4 sample entities)
 - **Audit trail:** JSONL audit captures full response body (output_summary, tier, tool_calls) for /v1/process requests
 - **Dashboard chat:** Polls audit every 3s; injects ALL external LLM interactions (curl, Jarvis, API) into chat panel with orange source badges
 
@@ -88,9 +90,9 @@
 
 | Metric | Value |
 |--------|-------|
-| Source LOC | 9,518 |
+| Source LOC | 9,582 |
 | Test LOC | 3,386 |
-| Total LOC | 12,904 |
+| Total LOC | 12,968 |
 | Total tests | 248 (all passing) |
 | Test time | ~26 seconds |
 | Packages | 11 (tool_broker, jarvis, jarvis_audio, memory, secretary, dashboard, digests, patterns, cameras, satellites, tests) |
@@ -120,7 +122,7 @@
 
 | Phase | % | Key Achievement |
 |-------|---|-----------------|
-| P1 Hub Setup | 63% | Pi running with HA, Docker, MQTT, Tailscale |
+| P1 Hub Setup | 67% | Pi running with HA, Docker, MQTT, Tailscale |
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 33% | Tailscale mesh + PolicyGate + auth |
@@ -128,8 +130,9 @@
 | P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper all installed |
 | P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
 | P8 Advanced AI | 100%* | *Vector store has ID collision bug; context_builder has method call bug |
+| P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling phase |
 
-**Overall: 37/57 items (65%)**
+**Overall: 37/62 items (60%)**
 
 ---
 
@@ -137,12 +140,12 @@
 
 | Severity | File | Issue |
 |----------|------|-------|
-| **HIGH** | `jarvis/tts_controller.py:73` | Shell injection via `shell=True` with f-string |
-| **HIGH** | `jarvis_audio/tts.py:91` | Same shell injection in `synthesize_streaming()` |
+| **HIGH** | `jarvis/tts_controller.py:72` | Shell injection via `shell=True` with f-string |
+| **HIGH** | `jarvis_audio/tts.py:103` | Same shell injection in `synthesize_streaming()` |
 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder — not real transcription |
 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist |
-| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` |
-| **LOW** | `tool_broker/tools.py` | `web_search`, `create_reminder` return "not implemented" |
+| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) |
+| **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered in tools.py but return "not implemented" in main.py |
 
 ---
 
@@ -163,7 +166,7 @@
 ## Known Issues / Next Steps
 
 ### Tier 1: Fix Now (Security / Correctness)
-1. Fix TTS shell injection (`tts_controller.py`, `tts.py`)
+1. Fix TTS shell injection (`tts_controller.py:72`, `tts.py:103`)
 2. Fix context_builder `search_conversations()` → `search()`
 3. Fix vector store ID collisions → UUID
 4. Wire whisper.cpp into secretary transcription

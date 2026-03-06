@@ -89,7 +89,7 @@ Ollama (sidecar)   → 100.98.1.21:11434 (llama3.1:8b, via Tailscale)
 Tailscale          → Pi=100.83.1.2, Mac=100.98.1.21, iPhone=100.83.74.23
 PipeWire           → 1.4.2 + WirePlumber 0.5.8
 Tests              → 248 passing (~26s)
-Source LOC         → 9,518  |  Test LOC → 3,386  |  Total → 12,904
+Source LOC          → 9,582  |  Test LOC → 3,386  |  Total → 12,968
 ```
 
 ### Git State
@@ -107,28 +107,28 @@ c97a643 [Smart Home] Full state audit: Pi migration, tiered LLM, SonoBus+PipeWir
 
 | Severity | File | Issue | Status |
 |----------|------|-------|--------|
-| **HIGH** | `jarvis/tts_controller.py:73` | Shell injection via `shell=True` | ⬜ OPEN |
-| **HIGH** | `jarvis_audio/tts.py:91` | Same shell injection pattern | ⬜ OPEN |
+| **HIGH** | `jarvis/tts_controller.py:72` | Shell injection via `shell=True` | ⬜ OPEN |
+| **HIGH** | `jarvis_audio/tts.py:103` | Same shell injection pattern | ⬜ OPEN |
 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder | ⬜ OPEN |
 | **MEDIUM** | `memory/context_builder.py:174` | Calls nonexistent `search_conversations()` | ⬜ OPEN |
-| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` | ⬜ OPEN |
-| **LOW** | `tool_broker/tools.py` | `web_search`, `create_reminder` return "not implemented" | ⬜ OPEN |
+| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) | ⬜ OPEN |
+| **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered in tools.py but return "not implemented" in main.py | ⬜ OPEN |
 
 ---
 
 ## What's Left To Do
 
 ### Immediate Priority — Tier 1 (Security/Correctness)
-1. **Fix TTS shell injection** — `tts_controller.py:73` and `tts.py:91`. Replace `shell=True` with `subprocess.Popen` using `stdin=PIPE`. See `jarvis_audio/stt.py` for correct pattern.
+1. **Fix TTS shell injection** — `tts_controller.py:72` and `tts.py:103`. Replace `shell=True` with `subprocess.Popen` using `stdin=PIPE`. See `jarvis_audio/stt.py` for correct pattern.
 2. **Fix context_builder method call** — `context_builder.py:174`: change `search_conversations()` → `search()` to match `VectorMemory.search()` signature.
-3. **Fix vector store ID collisions** — `vector_store.py`: replace `hash(text) % 10000` with `str(uuid.uuid4())` in 3 locations.
+3. **Fix vector store ID collisions** — `vector_store.py`: replace `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) with `str(uuid.uuid4())`.
 4. **Wire whisper.cpp into secretary** — `secretary/core/transcription.py` returns hardcoded text. Reference `jarvis_audio/stt.py` for working whisper.cpp integration.
 
 ### Near-term — Tier 2 (Reliability)
 5. **JSONL log rotation** — audit_log.jsonl grows unbounded; add daily rotation
 6. **Persistent httpx.AsyncClient** — new client per request wastes TCP connections
 7. **Tailscale ACLs** — restrict port access per device
-8. **Remove/disable unimplemented tools** — `web_search`, `create_reminder`
+8. **Remove/disable unimplemented tools** — `web_search`, `create_reminder` registered in `tools.py` but return "not implemented" in `main.py`
 
 ### Medium-term — Tier 3 (Features)
 9. **SSE streaming endpoint** — `POST /v1/process/stream`

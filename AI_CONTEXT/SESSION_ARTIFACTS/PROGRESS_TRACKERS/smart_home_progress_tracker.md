@@ -2,7 +2,9 @@
 
 **Created:** 2026-03-02  
 **Last Updated:** 2026-03-05  
-**Status:** Active (Rev 7.0 -- Audit/dashboard chat visibility, systemd deploy, diagnostic patterns)
+**Status:** Active (Rev 8.0 — Aligned to 2026-03-05 roadmap; added P9; authority chain established)  
+**Authority:** Vision/specs → Roadmap → **This Tracker** → Current State  
+**Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
 ---
 
@@ -18,11 +20,12 @@
 | P6 | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
-| **TOTAL** | | **57** | **37** | **🟢 65%** |
+| P9 | Chat Tier Packs | 5 | 0 | 🔴 0% |
+| **TOTAL** | | **62** | **37** | **🟡 60%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
 **Tests:** 248 passing (pytest, ~26s)  
-**Code:** 12,904 LOC (9,518 source + 3,386 test) across 11 packages  
+**Code:** 12,968 LOC (9,582 source + 3,386 test) across 11 packages  
 **Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi  
 **Assessment Grade:** B+ (2026-03-04 full codebase review)
 
@@ -46,7 +49,7 @@
 
 ---
 
-## Phase 2: AI Sidecar (7/7 = 100%)
+## Phase 2: AI Sidecar (8/8 = 100%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
@@ -55,7 +58,7 @@
 | P2-03 | Tool Broker API Design | ✅ COMPLETE | 2026-03-02 | schemas.py + OpenAPI endpoints |
 | P2-04 | Tool Broker Implementation | ✅ COMPLETE | 2026-03-02 | main.py with all endpoints; 45 tests |
 | P2-05 | Home Assistant API Integration | ✅ COMPLETE | 2026-03-02 | ha_client.py with async service calls |
-| P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation; 46 entities cached |
+| P2-06 | Entity Validation Layer | ✅ COMPLETE | 2026-03-02 | validators.py + entity validation; 48 entities in live HA cache (entity_registry.json is placeholder with 4 sample entities) |
 | P2-07 | End-to-End Test | ✅ COMPLETE | 2026-03-04 | Live HA + Ollama + Tool Broker verified on Pi; graceful tier failure diagnostics (HADiagnostic/TierDiagnostic pattern) |
 | P2-08 | Dashboard Chat Visibility | ✅ COMPLETE | 2026-03-05 | Audit middleware captures response body (output_summary, tier, tool_calls); dashboard polls audit log every 3s and injects ALL external LLM interactions (curl, Jarvis, API) into chat panel with source badges |
 
@@ -172,6 +175,20 @@
 
 ---
 
+## Phase 9: Chat Tier Packs (0/5 = 0%)
+
+| ID | Item | Status | Completed | Notes |
+|----|------|--------|-----------|-------|
+| P9-01 | Chat-Specific Source Documents | ⬜ NOT STARTED | - | chat_operating_protocol.md, optimized current_state, decisions_log |
+| P9-02 | Tier Configuration | ⬜ NOT STARTED | - | chat_tiers.yml with T0/T1/T2/T3 definitions |
+| P9-03 | Generator Chat Mode | ⬜ NOT STARTED | - | --chat flag for generate_context_pack.py |
+| P9-04 | Verifier for Chat Packs | ⬜ NOT STARTED | - | Validate structure and staleness |
+| P9-05 | Upload and Test in ChatGPT | ⬜ NOT STARTED | - | Mount packs, verify alignment |
+
+**Phase 9 Status:** 🔴 NOT STARTED — Infrastructure/tooling phase, no code dependencies.
+
+---
+
 ## Open Decisions
 
 | Decision ID | Topic | Options | Status | Decided |
@@ -212,12 +229,14 @@
 
 ## Update Instructions
 
+**Authority chain:** Vision/specs → Roadmap → **This Tracker** → Current State
+
 **After completing a roadmap item:**
-1. Update the item's Status to ✅ COMPLETE
-2. Add completion date to Completed column
-3. Update phase completion percentage
-4. Update executive summary totals
-5. Add session log entry
+1. Update the authoritative roadmap first (`ROADMAPS/2026-03-05_smart_home_master_roadmap.md`)
+2. Then update this tracker: Status → ✅ COMPLETE, add date, update phase %, update executive summary
+3. Then update both `current_state.md` files
+4. Add session log entry
+5. If adding new items (like P1-09, P2-08), add them to the roadmap first, then here
 
 **Status Legend:**
 - ⬜ NOT STARTED

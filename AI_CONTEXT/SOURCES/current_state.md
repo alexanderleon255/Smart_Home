@@ -1,8 +1,9 @@
 # Smart Home — Current State
 
-**Created:** 2026-03-02  
-**Last Updated:** 2026-03-05 (Rev 5.0 — Systemd deploy, diagnostic patterns, dashboard chat visibility)  
-**Purpose:** What is installed, current phase, blockers, next actions
+**Last Updated:** 2026-03-05 (Rev 6.0 — Aligned to 2026-03-05 roadmap; authority chain established)  
+**Purpose:** What is installed, current phase, blockers, next actions  
+**Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
+**Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
 ---
 
@@ -73,12 +74,13 @@
 ## Current Phase
 
 **Active work:** Post-assessment hardening + operational polish  
-**Overall progress:** 37/57 items complete (65%)  
+**Overall progress:** 37/62 items complete (60%)  
 **Phases 100% done:** P2 (AI Sidecar), P7* (Secretary — transcription is placeholder), P8* (Advanced AI — has bugs)  
 **Phases >50% done:** P1 (67%), P6 (80%)  
+**Phases not started:** P3 (superseded by P6), P5 (hardware blocked), P9 (Chat Tier Packs)  
 **Main blockers:** Zigbee hardware (P1-04), camera hardware (P5), live voice testing (P6-10)  
 **Total tests:** 248 passing (~26s)  
-**Total LOC:** 12,904 (9,518 source + 3,386 test)
+**Total LOC:** 12,968 (9,582 source + 3,386 test)
 
 ---
 
@@ -86,13 +88,13 @@
 
 | Metric | Value |
 |--------|-------|
-| Source LOC | 9,518 |
+| Source LOC | 9,582 |
 | Test LOC | 3,386 |
-| Total LOC | 12,904 |
+| Total LOC | 12,968 |
 | Total tests | 248 (all passing) |
 | Test time | ~26 seconds |
 | Packages | 11 |
-| Python version | 3.13 (canonical) |
+| Python version | 3.12.2 (canonical) |
 
 ---
 
@@ -103,7 +105,7 @@
 - **Sidecar tier:** llama3.1:8b on Mac Ollama — complex queries via Tailscale
 - **Graceful failures:** TierStatus enum (7 states), per-tier diagnostic messages
 - **Health endpoint:** `GET /v1/health` returns `ok` / `degraded` / `llm_offline`
-- **Entity cache:** 48 Home Assistant entities validated
+- **Entity cache:** 48 Home Assistant entities validated (live runtime cache; `entity_registry.json` is a placeholder with 4 sample entities)
 - **Audit trail:** JSONL audit captures full response body for /v1/process (output_summary, tier, tool_calls, llm_error)
 - **Dashboard:** Polls audit every 3s; injects ALL external LLM interactions into chat with source badges
 
@@ -113,12 +115,12 @@
 
 | Severity | File | Issue |
 |----------|------|-------|
-| **HIGH** | `jarvis/tts_controller.py:73` | Shell injection via `shell=True` with f-string |
-| **HIGH** | `jarvis_audio/tts.py:91` | Same shell injection in `synthesize_streaming()` |
+| **HIGH** | `jarvis/tts_controller.py:72` | Shell injection via `shell=True` with f-string |
+| **HIGH** | `jarvis_audio/tts.py:103` | Same shell injection in `synthesize_streaming()` |
 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder — not real transcription |
 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist |
-| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` |
-| **LOW** | `tool_broker/tools.py` | `web_search` and `create_reminder` return "not implemented" |
+| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) |
+| **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered in tools.py but return "not implemented" in main.py |
 
 ---
 
@@ -126,7 +128,7 @@
 
 | Phase | % | Key Achievement |
 |-------|---|-----------------|
-| P1 Hub Setup | 63% | Pi running with HA Docker, MQTT, Tailscale |
+| P1 Hub Setup | 67% | Pi running with HA Docker, MQTT, Tailscale |
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 33% | Tailscale mesh + PolicyGate + auth + rate limiting |
@@ -134,6 +136,7 @@
 | P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper installed |
 | P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
 | P8 Advanced AI | 100%* | *Vector store has ID collision bug, context_builder has method bug |
+| P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling |
 
 ---
 
@@ -151,7 +154,7 @@
 ## Next Actions (Priority Order)
 
 ### Tier 1: Fix Now
-1. Fix TTS shell injection in `tts_controller.py` and `tts.py`
+1. Fix TTS shell injection in `tts_controller.py:72` and `tts.py:103`
 2. Fix `context_builder.py` `search_conversations()` → `search()` method call
 3. Fix vector store ID collisions → use UUID
 4. Wire whisper.cpp into `secretary/core/transcription.py`

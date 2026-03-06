@@ -24,28 +24,31 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 
 ## 2. Document Hierarchy
 
-| Document | Purpose | Load When |
-|----------|---------|-----------|
-| `SOURCES/vision_document.md` | Strategic vision, architecture overview | Always first |
-| `SESSION_ARTIFACTS/current_state.md` | Live platform state | Every session |
-| `SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md` | Phase completion tracking | Every session |
-| `SESSION_ARTIFACTS/ROADMAPS/2026-03-02_smart_home_master_roadmap.md` | Implementation milestones | Planning sessions |
-| `SOURCES/decisions_log.md` | Locked decisions + rationale | Architecture decisions |
-| `SESSION_ARTIFACTS/CHECKLISTS/phase*_checklist.md` | Detailed task lists | Implementing specific phase |
-| `References/Smart_Home_Threat_Model*.md` | Security analysis | Security-related work |
+**Authority chain:** Vision/specs → Roadmap → Progress Tracker → Current State  
+If documents disagree, the higher-authority document wins.
+
+| Document | Purpose | Authority | Load When |
+|----------|---------|-----------|----------|
+| `SOURCES/vision_document.md` | Strategic vision, architecture | ⭐ Highest | Always first |
+| `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md` | Implementation milestones, phase status | ⭐ High | Every session |
+| `SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md` | Phase completion tracking | Medium | Every session |
+| `SESSION_ARTIFACTS/current_state.md` | Live platform state, metrics | Medium | Every session |
+| `SOURCES/decisions_log.md` | Locked decisions + rationale | High | Architecture decisions |
+| `SESSION_ARTIFACTS/CHECKLISTS/phase*_checklist.md` | Detailed task lists | Reference | Implementing specific phase |
+| `References/Smart_Home_Threat_Model*.md` | Security analysis | Reference | Security-related work |
 
 ---
 
 ## 3. Current State
 
 **As of 2026-03-05:**
-- **37/57 items complete (65%)** — P2, P7, P8 fully done; P1, P4, P6 in progress
+- **37/62 items complete (60%)** — P2, P7, P8 fully done; P1, P4, P6 in progress; P9 not started
 - Pi 5 running Debian Bookworm with HA (Docker), Tool Broker, Ollama, PipeWire, Dashboard
 - Tiered LLM: qwen2.5:1.5b (local, Pi) + llama3.1:8b (sidecar, Mac via Tailscale)
 - SonoBus built from source + PipeWire JACK shim audio routing
 - Dashboard chat shows ALL LLM interactions regardless of origin (curl, Jarvis, API)
 - 5 systemd user units for service persistence + deploy/bootstrap.sh
-- 248 tests passing, ~12,900 LOC Python
+- 248 tests passing, 12,968 LOC Python (9,582 source + 3,386 test)
 - Dashboard with chat, tier badges, source badges, activity log deployed on Pi
 
 **Open Decisions:** See `SOURCES/decisions_log.md`  
@@ -105,6 +108,7 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 | P1-06 | MQTT Broker Setup | 1h |
 | P1-07 | Basic Automation Test | 1h |
 | P1-08 | Backup Configuration | 1h |
+| P1-09 | Service Persistence & Deploy Script | 3h |
 
 ### Phase 2: AI Sidecar
 | ID | Description | Effort |
@@ -116,6 +120,7 @@ The LLM is a **router**, not an **actuator**. It outputs structured JSON tool ca
 | P2-05 | Home Assistant API Integration | 4h |
 | P2-06 | Entity Validation Layer | 2h |
 | P2-07 | End-to-End Test | 2h |
+| P2-08 | Dashboard Chat Visibility | 3h |
 
 ### Phase 3: Voice Pipeline
 | ID | Description | Effort |
@@ -206,8 +211,8 @@ SESSION_ARTIFACTS/HANDOFFS/YYYY-MM-DD_<topic>_handoff.md
 # Check project status
 cat AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md
 
-# View roadmap
-cat AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-02_smart_home_master_roadmap.md
+# View roadmap (authoritative)
+cat AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md
 
 # View vision
 cat AI_CONTEXT/SOURCES/vision_document.md

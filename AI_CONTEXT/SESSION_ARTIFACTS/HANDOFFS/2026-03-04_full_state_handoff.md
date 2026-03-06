@@ -52,7 +52,7 @@ Ollama (local)   → localhost:11434 (qwen2.5:1.5b)
 Ollama (sidecar) → 100.98.1.21:11434 (llama3.1:8b, via Tailscale)
 Tailscale        → Pi=100.83.1.2, Mac=100.98.1.21, iPhone=100.83.74.23
 PipeWire         → 1.4.2 + WirePlumber 0.5.8
-Entity cache     → 46 HA entities
+Entity cache     → 48 HA entities (live runtime cache; entity_registry.json is placeholder with 4 sample entities)
 Tests            → 194 passing (~25s)
 ```
 

@@ -40,7 +40,7 @@
 These are bugs that will cause security vulnerabilities or runtime crashes. Fix before any new feature work.
 
 #### 1. TTS Shell Injection (SECURITY — HIGH)
-- **Files:** `jarvis/tts_controller.py:73`, `jarvis_audio/tts.py:91`
+- **Files:** `jarvis/tts_controller.py:72`, `jarvis_audio/tts.py:103`
 - **Bug:** Uses `shell=True` with `f'echo "{safe_text}" | ...'`. The `safe_text` only escapes double quotes — inputs with `$(...)`, backticks, `\`, or `${}` execute arbitrary shell commands
 - **Fix:** Replace `shell=True` with `subprocess.Popen` using `stdin=PIPE`. Write text directly to Piper's stdin via `process.stdin.write(text.encode())`. No shell needed.
 - **Pattern to follow:** Look at how `jarvis_audio/stt.py` invokes whisper.cpp — it uses `subprocess.Popen` without shell=True correctly
@@ -55,8 +55,8 @@ These are bugs that will cause security vulnerabilities or runtime crashes. Fix 
 - **Testing:** Existing `test_context_builder.py` tests should pass. Add one test that actually exercises the vector memory path.
 
 #### 3. Vector Store ID Collisions (DATA LOSS — MEDIUM)
-- **File:** `memory/vector_store.py` — lines 84, 114, 146
-- **Bug:** Uses `hash(text) % 10000` for ChromaDB document IDs. Only 10K possible IDs → documents silently overwrite each other as the store grows.
+- **File:** `memory/vector_store.py` — line 84 (`hash(text) % 10000`), lines 114, 146 (`hash(text) % 100000`)
+- **Bug:** Uses `hash(text) % 10000` or `hash(text) % 100000` for ChromaDB document IDs. Only 10K-100K possible IDs → documents silently overwrite each other as the store grows.
 - **Fix:** Replace with `str(uuid.uuid4())`. Import `uuid` at top. All 3 occurrences (in `store_conversation()`, `store_embedding()`, `store_interaction()`).
 - **Effort:** 15 minutes
 - **Testing:** Verify `test_advanced_features.py` still passes. Add test that stores 2 different texts and retrieves both.
