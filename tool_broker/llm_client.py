@@ -194,9 +194,24 @@ class LLMClient:
         # Track sidecar availability (avoid repeated timeouts)
         self._sidecar_available: Optional[bool] = None
         
+        # Persistent httpx client for connection pooling
+        self._client: Optional[httpx.AsyncClient] = None
+        
         # Expose for health check / backward compat
         self.base_url = self.local_url
         self.model = self.local_model
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return persistent httpx client, creating lazily."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=60.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
         
         logger.info(
             f"LLMClient initialized — local={self.local_url}/{self.local_model}, "
@@ -253,24 +268,24 @@ class LLMClient:
         if not url:
             return TierDiagnostic(tier=tier, url="", model=model, status=TierStatus.NOT_CONFIGURED)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{url}/api/tags", timeout=5.0)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    models = [m.get("name", "") for m in data.get("models", [])]
-                    model_base = model.split(":")[0]
-                    if any(model_base in m for m in models):
-                        return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.CONNECTED)
-                    return TierDiagnostic(
-                        tier=tier, url=url, model=model,
-                        status=TierStatus.MODEL_MISSING,
-                        detail=f"available models: {', '.join(models) or 'none'}",
-                    )
+            client = self._get_client()
+            resp = await client.get(f"{url}/api/tags", timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                models = [m.get("name", "") for m in data.get("models", [])]
+                model_base = model.split(":")[0]
+                if any(model_base in m for m in models):
+                    return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.CONNECTED)
                 return TierDiagnostic(
                     tier=tier, url=url, model=model,
-                    status=TierStatus.UNKNOWN_ERROR,
-                    detail=f"HTTP {resp.status_code}",
+                    status=TierStatus.MODEL_MISSING,
+                    detail=f"available models: {', '.join(models) or 'none'}",
                 )
+            return TierDiagnostic(
+                tier=tier, url=url, model=model,
+                status=TierStatus.UNKNOWN_ERROR,
+                detail=f"HTTP {resp.status_code}",
+            )
         except httpx.ConnectError as e:
             return TierDiagnostic(tier=tier, url=url, model=model, status=TierStatus.UNREACHABLE, detail=str(e))
         except httpx.TimeoutException as e:
@@ -583,15 +598,15 @@ class LLMClient:
             "format": "json",
         }
         
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{url}/api/chat",
-                json=payload,
-                timeout=60.0
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("message", {}).get("content", "")
+        client = self._get_client()
+        resp = await client.post(
+            f"{url}/api/chat",
+            json=payload,
+            timeout=60.0
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("message", {}).get("content", "")
     
     def _parse_response(self, response_text: str) -> ConversationalResponse:
         """Parse LLM response text into ConversationalResponse.

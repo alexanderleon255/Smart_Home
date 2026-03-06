@@ -37,7 +37,20 @@ class SatelliteDiscovery:
         self.broadcast_port = broadcast_port
         self.api_port = api_port
         self.satellites: Dict[str, Dict] = {}
+        self._client: Optional[httpx.AsyncClient] = None
         self._load_known_satellites()
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return persistent httpx client, creating lazily."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=5.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
     
     def _load_known_satellites(self):
         """Load previously discovered satellites."""
@@ -119,13 +132,13 @@ class SatelliteDiscovery:
             return None
         
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"http://{ip_address}:{self.api_port}/status",
-                    timeout=2.0
-                )
-                response.raise_for_status()
-                return response.json()
+            client = self._get_client()
+            response = await client.get(
+                f"http://{ip_address}:{self.api_port}/status",
+                timeout=2.0
+            )
+            response.raise_for_status()
+            return response.json()
         except Exception as e:
             print(f"Error getting status for {satellite_id}: {e}")
             return None
@@ -154,14 +167,14 @@ class SatelliteDiscovery:
             return False
         
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"http://{ip_address}:{self.api_port}/config",
-                    json=config,
-                    timeout=5.0
-                )
-                response.raise_for_status()
-                return True
+            client = self._get_client()
+            response = await client.post(
+                f"http://{ip_address}:{self.api_port}/config",
+                json=config,
+                timeout=5.0
+            )
+            response.raise_for_status()
+            return True
         except Exception as e:
             print(f"Error configuring {satellite_id}: {e}")
             return False
@@ -190,14 +203,14 @@ class SatelliteDiscovery:
             return False
         
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"http://{ip_address}:{self.api_port}/play",
-                    json={"url": audio_url},
-                    timeout=2.0
-                )
-                response.raise_for_status()
-                return True
+            client = self._get_client()
+            response = await client.post(
+                f"http://{ip_address}:{self.api_port}/play",
+                json={"url": audio_url},
+                timeout=2.0
+            )
+            response.raise_for_status()
+            return True
         except Exception as e:
             print(f"Error routing audio to {satellite_id}: {e}")
             return False

@@ -3,7 +3,7 @@
 import json
 import logging
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -42,10 +42,10 @@ class ArchivalSystem:
             Path to session directory
         """
         if not session_id:
-            session_id = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+            session_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         
         # Create path: /hub_sessions/YYYY/MM/DD/session_id/
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         session_dir = (
             self.base_dir
             / str(now.year)
@@ -109,7 +109,7 @@ class ArchivalSystem:
         entry = {
             "session_id": session_id,
             "path": str(session_dir),
-            "archived_at": datetime.utcnow().isoformat(),
+            "archived_at": datetime.now(timezone.utc).isoformat(),
             "metadata": metadata or {},
         }
         
@@ -194,7 +194,7 @@ class ArchivalSystem:
         Returns:
             List of session IDs that were (or would be) deleted
         """
-        cutoff_date = datetime.utcnow() - timedelta(
+        cutoff_date = datetime.now(timezone.utc) - timedelta(
             days=secretary_config.max_session_retention_days
         )
         
@@ -202,6 +202,9 @@ class ArchivalSystem:
         
         for session in self.index["sessions"]:
             archived_at = datetime.fromisoformat(session["archived_at"])
+            # Ensure timezone-aware for comparison (legacy entries may be naive)
+            if archived_at.tzinfo is None:
+                archived_at = archived_at.replace(tzinfo=timezone.utc)
             
             if archived_at < cutoff_date:
                 to_delete.append(session)

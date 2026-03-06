@@ -87,7 +87,11 @@ class HADiagnostic:
 
 
 class HAClient:
-    """Async client for Home Assistant REST API."""
+    """Async client for Home Assistant REST API.
+    
+    Uses a persistent httpx.AsyncClient for connection pooling.
+    Call close() when done, or use as async context manager.
+    """
     
     def __init__(self, base_url: str = None, token: str = None):
         self.base_url = (base_url or config.ha_url).rstrip("/")
@@ -95,6 +99,28 @@ class HAClient:
         self._headers = {}
         if self.token:
             self._headers["Authorization"] = f"Bearer {self.token}"
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return persistent httpx client, creating lazily."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                headers=self._headers,
+                timeout=10.0,
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self.close()
     
     @property
     def is_configured(self) -> bool:
@@ -119,32 +145,31 @@ class HAClient:
 
         start = time.monotonic()
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/",
-                    headers=self._headers,
-                    timeout=5.0,
-                )
-                elapsed = int((time.monotonic() - start) * 1000)
-                if resp.status_code == 401:
-                    logger.error("HA authentication failed")
-                    return HADiagnostic(
-                        url=self.base_url,
-                        status=HAStatus.AUTH_FAILED,
-                        latency_ms=elapsed,
-                    )
-                if resp.status_code == 200:
-                    return HADiagnostic(
-                        url=self.base_url,
-                        status=HAStatus.CONNECTED,
-                        latency_ms=elapsed,
-                    )
+            client = self._get_client()
+            resp = await client.get(
+                f"{self.base_url}/api/",
+                timeout=5.0,
+            )
+            elapsed = int((time.monotonic() - start) * 1000)
+            if resp.status_code == 401:
+                logger.error("HA authentication failed")
                 return HADiagnostic(
                     url=self.base_url,
-                    status=HAStatus.UNKNOWN_ERROR,
-                    detail=f"HTTP {resp.status_code}",
+                    status=HAStatus.AUTH_FAILED,
                     latency_ms=elapsed,
                 )
+            if resp.status_code == 200:
+                return HADiagnostic(
+                    url=self.base_url,
+                    status=HAStatus.CONNECTED,
+                    latency_ms=elapsed,
+                )
+            return HADiagnostic(
+                url=self.base_url,
+                status=HAStatus.UNKNOWN_ERROR,
+                detail=f"HTTP {resp.status_code}",
+                latency_ms=elapsed,
+            )
         except httpx.ConnectError:
             elapsed = int((time.monotonic() - start) * 1000)
             logger.error(f"Cannot connect to HA at {self.base_url}")
@@ -182,16 +207,14 @@ class HAClient:
             raise HAAuthError("HA token not configured")
         
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/states",
-                    headers=self._headers,
-                    timeout=10.0
-                )
-                if resp.status_code == 401:
-                    raise HAAuthError("HA authentication failed")
-                resp.raise_for_status()
-                return resp.json()
+            client = self._get_client()
+            resp = await client.get(
+                f"{self.base_url}/api/states",
+            )
+            if resp.status_code == 401:
+                raise HAAuthError("HA authentication failed")
+            resp.raise_for_status()
+            return resp.json()
         except httpx.ConnectError as e:
             raise HAConnectionError(f"Cannot connect to HA: {e}")
     
@@ -209,18 +232,16 @@ class HAClient:
             raise HAAuthError("HA token not configured")
         
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/states/{entity_id}",
-                    headers=self._headers,
-                    timeout=10.0
-                )
-                if resp.status_code == 404:
-                    return None
-                if resp.status_code == 401:
-                    raise HAAuthError("HA authentication failed")
-                resp.raise_for_status()
-                return resp.json()
+            client = self._get_client()
+            resp = await client.get(
+                f"{self.base_url}/api/states/{entity_id}",
+            )
+            if resp.status_code == 404:
+                return None
+            if resp.status_code == 401:
+                raise HAAuthError("HA authentication failed")
+            resp.raise_for_status()
+            return resp.json()
         except httpx.ConnectError as e:
             raise HAConnectionError(f"Cannot connect to HA: {e}")
     
@@ -251,17 +272,15 @@ class HAClient:
             payload["entity_id"] = entity_id
         
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/services/{domain}/{service}",
-                    headers=self._headers,
-                    json=payload,
-                    timeout=10.0
-                )
-                if resp.status_code == 401:
-                    raise HAAuthError("HA authentication failed")
-                resp.raise_for_status()
-                return resp.json()
+            client = self._get_client()
+            resp = await client.post(
+                f"{self.base_url}/api/services/{domain}/{service}",
+                json=payload,
+            )
+            if resp.status_code == 401:
+                raise HAAuthError("HA authentication failed")
+            resp.raise_for_status()
+            return resp.json()
         except httpx.ConnectError as e:
             raise HAConnectionError(f"Cannot connect to HA: {e}")
     
@@ -289,15 +308,13 @@ class HAClient:
             raise HAAuthError("HA token not configured")
         
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/config",
-                    headers=self._headers,
-                    timeout=10.0
-                )
-                if resp.status_code == 401:
-                    raise HAAuthError("HA authentication failed")
-                resp.raise_for_status()
-                return resp.json()
+            client = self._get_client()
+            resp = await client.get(
+                f"{self.base_url}/api/config",
+            )
+            if resp.status_code == 401:
+                raise HAAuthError("HA authentication failed")
+            resp.raise_for_status()
+            return resp.json()
         except httpx.ConnectError as e:
             raise HAConnectionError(f"Cannot connect to HA: {e}")

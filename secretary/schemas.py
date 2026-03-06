@@ -1,6 +1,6 @@
 """Pydantic schemas for secretary pipeline."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
@@ -45,13 +45,13 @@ class MemoryExtraction(BaseModel):
 class MemoryUpdate(BaseModel):
     """Memory update document for a session."""
     session_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     extractions: List[MemoryExtraction] = Field(default_factory=list)
 
 
 class LiveNotes(BaseModel):
     """Structured live notes from ongoing conversation."""
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     rolling_summary: str = Field(default="")
     decisions: List[str] = Field(default_factory=list)
     action_items: List[ActionItem] = Field(default_factory=list)

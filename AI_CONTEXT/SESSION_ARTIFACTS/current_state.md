@@ -1,7 +1,7 @@
 # Smart Home – Current State
 
 **Last Updated:** 2026-03-06  
-**Rev:** 7.0 (All 4 assessed bugs fixed; P6-07 Modelfile done; P7-03 wired; web_search/create_reminder removed)  
+**Rev:** 8.0 (P1-08 backup; P3 SUPERSEDED; P9 chat tier packs 100%; Bug #5 httpx pooling; Bug #7 datetime.utcnow; 87%)  
 **Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
@@ -93,8 +93,8 @@
 | Source LOC | 9,582 |
 | Test LOC | 3,386 |
 | Total LOC | 12,968 |
-| Total tests | 249 (all passing) |
-| Test time | ~26 seconds |
+| Total tests | 249 (all passing, 0 warnings) |
+| Test time | ~24 seconds |
 | Packages | 11 (tool_broker, jarvis, jarvis_audio, memory, secretary, dashboard, digests, patterns, cameras, satellites, tests) |
 
 ### Test Breakdown
@@ -122,17 +122,17 @@
 
 | Phase | % | Key Achievement |
 |-------|---|-----------------|
-| P1 Hub Setup | 67% | Pi running with HA, Docker, MQTT, Tailscale |
+| P1 Hub Setup | 78% | Pi running with HA, Docker, MQTT, Tailscale, backup script |
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
-| P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
+| P3 Voice (HA) | SUPERSEDED | Formally superseded by P6 Jarvis (all 6 items mapped) |
 | P4 Security | 100% | ACL/firewall artifacts + monitor alerts + audit reports + TTS shell fix |
 | P5 Cameras | 0% | Camera hardware not acquired |
 | P6 Jarvis Voice | 90% | SonoBus + PipeWire + whisper + Piper all installed; Modelfile DEC-008 done |
 | P7 Secretary | 100% | start_streaming() + process_audio_file() both wired to real whisper.cpp |
 | P8 Advanced AI | 100% | Vector store UUID4 IDs; context_builder search() call fixed |
-| P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling phase |
+| P9 Chat Tier Packs | 100% | Generator + verifier + 5 output files in GENERATED_CHAT/ |
 
-**Overall: 42/62 items (68%)**
+**Overall: 54/62 items (87%)**
 
 ---
 
@@ -143,13 +143,27 @@
 | ~~HIGH~~ | `secretary/core/transcription.py` | ~~Hardcoded placeholder~~ | ✅ Both `start_streaming()` + `process_audio_file()` wired to real whisper.cpp (commits 67efd8f, 0dee927) |
 | ~~MEDIUM~~ | `memory/context_builder.py:174` | ~~`search_conversations()` didn't exist~~ | ✅ → `search()` (commit 8769d5f) |
 | ~~MEDIUM~~ | `memory/vector_store.py` | ~~ID collisions via hash()~~ | ✅ → `uuid4()` (commit 8769d5f) |
-| ~~LOW~~ | `tool_broker/tools.py` + `main.py` | ~~`web_search`, `create_reminder` unimplemented~~ | ✅ Removed from REGISTERED_TOOLS + dead branches removed (commit 0dee927) |
-
+| ~~LOW~~ | `tool_broker/tools.py` + `main.py` | ~~`web_search`, `create_reminder` unimplemented~~ | ✅ Removed from REGISTERED_TOOLS + dead branches removed (commit 0dee927) || ~~MEDIUM~~ | 5 files (`ha_client`, `llm_client`, `secretary`, `satellites`, `cameras`) | ~~httpx.AsyncClient per-request overhead~~ | ✅ Lazy persistent `_get_client()` + `close()` pattern (this session) |
+| ~~LOW~~ | 5 files (`archival`, `secretary`, `transcription`, `schemas`, `example_usage`) | ~~`datetime.utcnow()` deprecation~~ | ✅ → `datetime.now(timezone.utc)` — 0 pytest warnings (this session) |
 ---
 
 ## Recent Changes (2026-03-06 — this session)
 
-1. **All 4 assessed bugs fixed** (commits 8769d5f, 67efd8f, 0dee927):
+### Latest sprint (non-HW-blocked sweep)
+1. **P1-08 Backup Configuration** — `deploy/backup.sh`: HA config, AI_CONTEXT, Docker volumes (mosquitto, pihole), audit logs; 30-day retention; `deploy/README.md` updated
+2. **P3 SUPERSEDED** — All 6 items formally mapped to P6 equivalents in tracker + roadmap
+3. **P6-10 Voice test protocol** — `jarvis_audio/scripts/voice_test_protocol.sh`: Phase A (10 automated infra checks) + Phase B (8 manual voice tests)
+4. **P9 Chat Tier Packs (5/5 complete)**:
+   - P9-01: `AI_CONTEXT/SOURCES/chat_operating_protocol.md` (invariants, tier escalation, output conventions)
+   - P9-02: `AI_CONTEXT/TIERS/chat_tiers.yml` (T0-T3 definitions, token budgets, sources)
+   - P9-03: `generate_context_pack.py --chat` (tier assembly, section extraction, SHA-256 manifest)
+   - P9-04: `verify_context_pack.py --chat` (7 checks, --strict mode, CI exit codes)
+   - P9-05: 5 files in `AI_CONTEXT/GENERATED_CHAT/` — verifier PASS (0 errors, 0 warnings)
+5. **Bug #5 httpx pooling** — Lazy persistent `_get_client()` + `close()` in 5 files (ha_client, llm_client, secretary, satellites, cameras)
+6. **Bug #7 datetime.utcnow** — 10 occurrences in 5 files replaced with `datetime.now(timezone.utc)`; 0 pytest warnings
+7. **Roadmap Rev 5.0** — All changes reflected in roadmap, tracker, both current_state files
+
+### Earlier changes (prior sprint)
    - `secretary/core/transcription.py`: `start_streaming()` + `process_audio_file()` wired to real whisper.cpp via `asyncio.create_subprocess_exec`; model-path derivation with fallback
    - `memory/context_builder.py:174`: `search_conversations()` → `search()`
    - `memory/vector_store.py`: `hash(text) % N` → `uuid4()` (3 occurrences)
@@ -168,22 +182,21 @@
 ## Known Issues / Next Steps
 
 ### Tier 1: Operational (no code blockers)
-1. Apply Tailscale ACLs + device tags in admin console (manual ops)
-2. P6-10 live voice testing — needs iPhone SonoBus peer
-3. P9 Chat Tier Packs (5 items — docs/tooling, no code dependencies)
+1. P6-10 live voice testing — needs iPhone SonoBus peer
+2. Apply Tailscale ACLs + device tags in admin console (manual ops)
+3. Upload chat tier packs to ChatGPT Projects (manual ops)
 
 ### Tier 2: Harden (Reliability / Ops)
-4. Persistent httpx.AsyncClient pooling in `tool_broker/ha_client.py`
-5. `POST /v1/process/stream` SSE endpoint
-6. Async `tool_broker_client.py`
-7. Complexity classifier tests
-8. Health watchdog with notifications
-9. Split `dashboard/app.py` into modules
+4. `POST /v1/process/stream` SSE endpoint
+5. Async `tool_broker_client.py`
+6. Complexity classifier tests
+7. Health watchdog with notifications
+8. Split `dashboard/app.py` into modules
 
 ### Tier 3: Hardware-blocked
-10. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
-11. P5 Camera integration (awaiting DEC-005 hardware decision)
-12. P3 HA Voice Pipeline (low priority — superseded by P6)
+9. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
+10. P5 Camera integration (awaiting DEC-005 hardware decision)
+11. P3 HA Voice Pipeline (low priority — superseded by P6)
 
 ---
 

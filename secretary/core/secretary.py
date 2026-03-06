@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -56,6 +56,19 @@ class SecretaryEngine:
         
         self.current_notes = LiveNotes()
         self.is_running = False
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return persistent httpx client, creating lazily."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=120.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
     
     async def start_live_processing(self, get_transcript_func):
         """
@@ -98,7 +111,7 @@ class SecretaryEngine:
             data = json.loads(response)
             
             # Update live notes
-            self.current_notes.last_updated = datetime.utcnow()
+            self.current_notes.last_updated = datetime.now(timezone.utc)
             self.current_notes.rolling_summary = data.get("rolling_summary", "")
             self.current_notes.decisions = data.get("decisions", [])
             
@@ -239,15 +252,15 @@ class SecretaryEngine:
             "options": {"temperature": 0.3},
         }
         
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{self.ollama_url}/api/chat",
-                json=payload,
-                timeout=120.0
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("message", {}).get("content", "")
+        client = self._get_client()
+        resp = await client.post(
+            f"{self.ollama_url}/api/chat",
+            json=payload,
+            timeout=120.0
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("message", {}).get("content", "")
     
     def stop(self):
         """Stop live processing."""

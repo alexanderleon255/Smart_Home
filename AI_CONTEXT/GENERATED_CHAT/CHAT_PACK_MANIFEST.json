@@ -1,0 +1,22 @@
+{
+  "generated": "2026-03-06 13:33 UTC",
+  "generator": "generate_context_pack.py --chat",
+  "packs": {
+    "CHAT_T0_BOOT": {
+      "tokens": 2951,
+      "sha256": "b298a794ec17287c8aa8bf09b3a5f5d8860a20a0be4264e01ffa02e771e95b83"
+    },
+    "CHAT_T1_CORE": {
+      "tokens": 4567,
+      "sha256": "df17ded93325755fcc3305d3cf5a1a8c23f9338c9f0321ab2687e9ca2cb8be10"
+    },
+    "CHAT_T2_BUILD": {
+      "tokens": 11789,
+      "sha256": "f242956dca5e53052f92e0a3322cf13eae4b13c0facbba58df1863b14a70d97d"
+    },
+    "CHAT_T3_DEEP": {
+      "tokens": 39825,
+      "sha256": "faf169adcc406a99f7c46c1c70b67347697f6cd59c8bbe7b4830b6adaef30c04"
+    }
+  }
+}

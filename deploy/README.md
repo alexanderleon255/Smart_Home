@@ -55,6 +55,58 @@ Set these environment variables (in `~/.bashrc`, `.env`, or systemd overrides):
 | `SIDECAR_OLLAMA_MODEL` | Sidecar model name | `llama3.1:8b` |
 | `LLM_ROUTING_MODE` | `auto`, `local`, or `sidecar` | `auto` |
 
+## Backup & Restore
+
+### Daily Backup
+
+```bash
+# Full backup (HA config, AI Context, Docker volumes, audit logs)
+./deploy/backup.sh
+
+# HA config only
+./deploy/backup.sh --config-only
+
+# Custom backup destination
+BACKUP_DIR=/mnt/usb/backups ./deploy/backup.sh
+```
+
+Backups are stored as timestamped `.tar.gz` archives in `~/smart_home_backups/`
+(override with `BACKUP_DIR`). Old backups are pruned after 30 days (override with
+`BACKUP_RETENTION_DAYS`).
+
+**Recommended cron schedule** (daily at 3 AM):
+
+```bash
+crontab -e
+# Add:
+0 3 * * * /home/pi/Smart_Home/deploy/backup.sh >> /var/log/smart_home_backup.log 2>&1
+```
+
+### What Gets Backed Up
+
+| Component | Source | Archive Entry |
+|-----------|--------|---------------|
+| Home Assistant config | `../ha_config` (bind mount) | `ha_config.tar.gz` |
+| AI Context | `AI_CONTEXT/` | `ai_context.tar.gz` |
+| Mosquitto data | Docker volume `docker_mosquitto_data` | `mosquitto_data.tar.gz` |
+| Pi-hole config | Docker volumes `docker_pihole_*` | `pihole_*.tar.gz` |
+| Deploy configs | `deploy/` | `deploy.tar.gz` |
+| Audit logs | `tool_broker/audit_*.jsonl` | `audit_logs.tar.gz` |
+
+### Restore
+
+```bash
+# Extract to inspect
+tar -xzf ~/smart_home_backups/backup_YYYYMMDD_HHMMSS.tar.gz -C /tmp/restore
+
+# Restore HA config
+tar -xzf /tmp/restore/backup_*/ha_config.tar.gz -C ~/Smart_Home/
+
+# Restore Docker volume
+docker run --rm -v docker_mosquitto_data:/data -v /tmp/restore/backup_*:/backup \
+  alpine sh -c "cd /data && tar -xzf /backup/mosquitto_data.tar.gz"
+```
+
 ## Updating Services
 
 After pulling new code:

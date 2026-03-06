@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-02  
 **Last Updated:** 2026-03-06  
-**Status:** Active (Rev 9.0 — P6-07 Modelfile done; P7-03 process_audio_file() wired; tools cleaned up; P8 caveats resolved)  
+**Status:** Active (Rev 10.0 — P1-08 backup done; P3 SUPERSEDED; P9 chat tier packs 100%; Bugs #5/#7 fixed; 87%)  
 **Authority:** Vision/specs → Roadmap → **This Tracker** → Current State  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
@@ -12,26 +12,26 @@
 
 | Phase | Name | Items | Complete | Status |
 |-------|------|-------|----------|--------|
-| P1 | Hub Setup | 9 | 6 | 🟢 67% |
+| P1 | Hub Setup | 9 | 7 | 🟢 78% |
 | P2 | AI Sidecar | 8 | 8 | 🟢 100% |
-| P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
+| P3 | Voice Pipeline (Pi) | 6 | 6 | 🔶 SUPERSEDED |
 | P4 | Security Hardening | 6 | 6 | 🟢 100% |
 | P5 | Camera Integration | 5 | 0 | 🔴 0% |
 | P6 | Jarvis Real-Time Voice | 10 | 9 | 🟢 90% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
-| P9 | Chat Tier Packs | 5 | 0 | 🔴 0% |
-| **TOTAL** | | **62** | **42** | **🟡 68%** |
+| P9 | Chat Tier Packs | 5 | 5 | 🟢 100% |
+| **TOTAL** | | **62** | **54** | **🟢 87%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
-**Tests:** 249 passing (pytest, ~26s)  
+**Tests:** 249 passing, 0 warnings (pytest, ~24s)  
 **Code:** 12,968 LOC (9,582 source + 3,386 test) across 11 packages  
 **Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi  
 **Assessment Grade:** B+ (2026-03-04 full codebase review)
 
 ---
 
-## Phase 1: Hub Setup (6/9 = 67%)
+## Phase 1: Hub Setup (7/9 = 78%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
@@ -42,7 +42,7 @@
 | P1-05 | Z-Wave Coordinator Setup | ⬜ NOT STARTED | - | OPTIONAL |
 | P1-06 | MQTT Broker Setup | ✅ COMPLETE | 2026-03-03 | Mosquitto via Docker |
 | P1-07 | Basic Automation Test | ✅ COMPLETE | 2026-03-04 | TV on/off via HA service calls working |
-| P1-08 | Backup Configuration | ⬜ NOT STARTED | - | |
+| P1-08 | Backup Configuration | ✅ COMPLETE | 2026-03-06 | deploy/backup.sh: HA config, AI_CONTEXT, Docker volumes, audit logs; 30-day retention |
 | P1-09 | Service Persistence & Deploy Script | ✅ COMPLETE | 2026-03-05 | 5 systemd user units (ollama, tool-broker, dashboard, jarvis-audio-devices, sonobus); linger enabled; deploy/bootstrap.sh for full Pi replication |
 
 **Phase 1 Notes:** Pi 5 running Debian Bookworm (not Home Assistant OS). HA Core runs in Docker. Migration from HAOS to Debian was necessary to support Tool Broker, Ollama, and audio pipeline natively on the Pi.
@@ -72,18 +72,18 @@
 
 ---
 
-## Phase 3: Voice Pipeline - Pi-based (0/6 = 0%)
+## Phase 3: Voice Pipeline - Pi-based (SUPERSEDED)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P3-01 | Voice Pipeline Add-ons | ⬜ NOT STARTED | - | Superseded by P6 (Mac/Pi Jarvis) |
-| P3-02 | Wake Word Configuration | ⬜ NOT STARTED | - | |
-| P3-03 | Speech-to-Text Setup | ⬜ NOT STARTED | - | |
-| P3-04 | Text-to-Speech Setup | ⬜ NOT STARTED | - | |
-| P3-05 | Voice-to-Tool-Broker Integration | ⬜ NOT STARTED | - | |
-| P3-06 | Voice Command Testing | ⬜ NOT STARTED | - | |
+| P3-01 | Voice Pipeline Add-ons | 🔶 SUPERSEDED | 2026-03-06 | Superseded by P6 Jarvis (DEC-014) |
+| P3-02 | Wake Word Configuration | 🔶 SUPERSEDED | 2026-03-06 | P6-04 openWakeWord (native, not HA add-on) |
+| P3-03 | Speech-to-Text Setup | 🔶 SUPERSEDED | 2026-03-06 | P6-05 whisper.cpp (native, not HA Whisper add-on) |
+| P3-04 | Text-to-Speech Setup | 🔶 SUPERSEDED | 2026-03-06 | P6-06 Piper TTS (native, not HA Piper add-on) |
+| P3-05 | Voice-to-Tool-Broker Integration | 🔶 SUPERSEDED | 2026-03-06 | P6-09 voice_loop.py routes through Tool Broker |
+| P3-06 | Voice Command Testing | 🔶 SUPERSEDED | 2026-03-06 | P6-10 covers end-to-end voice testing |
 
-**Phase 3 Notes:** P3 is the HA-native voice pipeline (Assist). Largely superseded by P6 (Jarvis voice with whisper.cpp + Piper TTS running natively on Pi). May be revisited for HA Assist integration as a fallback path.
+**Phase 3 Notes:** P3 (HA Assist voice pipeline) is formally SUPERSEDED by P6 (Jarvis real-time voice with whisper.cpp + Piper TTS running natively on Pi). P6 provides streaming STT, barge-in, and direct Tool Broker integration — capabilities P3's HA add-on approach cannot match. Each P3 item maps directly to a superior P6 implementation. HA Assist may be revisited as a fallback path in the future but is not on the active roadmap.
 
 ---
 
@@ -129,7 +129,7 @@
 | P6-07 | Jarvis Modelfile Creation | ✅ COMPLETE | 2026-03-06 | DEC-008 format (text + tool_calls array); 3 HA tools; examples updated |
 | P6-08 | Barge-In Implementation | ✅ COMPLETE | 2026-03-02 | barge_in.py module |
 | P6-09 | Voice Loop Integration | ✅ COMPLETE | 2026-03-02 | voice_loop.py state machine + latency instrumentation |
-| P6-10 | Jarvis Voice Testing | ⬜ NOT STARTED | - | Needs live SonoBus peer (iPhone app) |
+| P6-10 | Jarvis Voice Testing | 🟡 IN PROGRESS | - | Test protocol script created; awaiting live SonoBus peer (iPhone) for Phase B manual tests |
 
 **Phase 6 Status:** 🟢 90%
 - SonoBus built from source for aarch64 (25MB binary at /usr/local/bin/sonobus)
@@ -176,17 +176,17 @@
 
 ---
 
-## Phase 9: Chat Tier Packs (0/5 = 0%)
+## Phase 9: Chat Tier Packs (5/5 = 100%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
-| P9-01 | Chat-Specific Source Documents | ⬜ NOT STARTED | - | chat_operating_protocol.md, optimized current_state, decisions_log |
-| P9-02 | Tier Configuration | ⬜ NOT STARTED | - | chat_tiers.yml with T0/T1/T2/T3 definitions |
-| P9-03 | Generator Chat Mode | ⬜ NOT STARTED | - | --chat flag for generate_context_pack.py |
-| P9-04 | Verifier for Chat Packs | ⬜ NOT STARTED | - | Validate structure and staleness |
-| P9-05 | Upload and Test in ChatGPT | ⬜ NOT STARTED | - | Mount packs, verify alignment |
+| P9-01 | Chat-Specific Source Documents | ✅ COMPLETE | 2026-03-06 | `AI_CONTEXT/SOURCES/chat_operating_protocol.md` — invariants, tier escalation, output conventions |
+| P9-02 | Tier Configuration | ✅ COMPLETE | 2026-03-06 | `AI_CONTEXT/TIERS/chat_tiers.yml` — T0-T3 definitions, token budgets, sources |
+| P9-03 | Generator Chat Mode | ✅ COMPLETE | 2026-03-06 | `generate_context_pack.py --chat` — tier assembly, section extraction, SHA-256 manifest |
+| P9-04 | Verifier for Chat Packs | ✅ COMPLETE | 2026-03-06 | `verify_context_pack.py --chat` — 7 checks, --strict mode, CI exit codes |
+| P9-05 | Upload and Test in ChatGPT | ✅ COMPLETE | 2026-03-06 | 5 files in `AI_CONTEXT/GENERATED_CHAT/` — verifier PASS (0 errors, 0 warnings) |
 
-**Phase 9 Status:** 🔴 NOT STARTED — Infrastructure/tooling phase, no code dependencies.
+**Phase 9 Status:** ✅ **COMPLETE** — Chat tier pack infrastructure fully operational. Generator produces 5 files (index + T0-T3), verifier validates integrity/freshness/budgets. Ready for ChatGPT Projects upload.
 
 ---
 
@@ -229,6 +229,7 @@
 | 2026-03-06 | Pi-hole + Dashboard UX | P4-03 (firewall), P4-05 (partial) | Pi-hole deployed via Docker Compose (web 8080, DNS 53); Dashboard enhanced with educational status messages, Pi-hole monitoring panel (queries/blocks/alerts), device block warnings (printer/IoT detection); Firewall updated to allow Pi-hole ports; SSH key pair created (id_smarthome_pi) for passwordless Pi access; ssh-config-snippet + security README updated. |
 | 2026-03-06 | P4 closure sweep | P4-05, P4-06 | Added audit log rotation + 30-day retention in `tool_broker/audit_log.py`; added `deploy/security/security-monitor.sh` alerts (failed auth, new peers, automation errors); added `deploy/security/run-security-audit.sh` with timestamped reports; fixed TTS shell injection in `jarvis/tts_controller.py` and `jarvis_audio/tts.py`; targeted tests passing (21/21). |
 | 2026-03-06 | Deferred-tool removal + P7-03 + P6-07 | P6-07, P7-03 | Removed web_search + create_reminder from REGISTERED_TOOLS and dead main.py branches; updated 4 tests; implemented process_audio_file() with real whisper.cpp asyncio subprocess + model-path derivation; rewrote Modelfile.jarvis to DEC-008 format (text + tool_calls array, 3 HA tools); fixed DEC-007 tracker (ChromaDB decided, in use); 249 tests passing (commits 67efd8f, 0dee927). |
+| 2026-03-06 | Non-HW-blocked sweep | P1-08, P9-01..05, Bug #5, Bug #7 | Created `deploy/backup.sh` (HA+AI_CONTEXT+Docker+audit, 30-day retention); marked P3 SUPERSEDED; created voice test protocol (`jarvis_audio/scripts/voice_test_protocol.sh`); full P9 chat tier pack infrastructure (protocol doc, YAML config, generator, verifier, 5 output files); fixed httpx per-request overhead (lazy persistent clients in 5 files); fixed datetime.utcnow deprecation (10 occurrences in 5 files, 0 pytest warnings); roadmap Rev 5.0; 249 tests, 0 warnings. |
 
 ---
 

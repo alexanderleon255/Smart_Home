@@ -7,7 +7,7 @@ This demonstrates the full workflow from session creation through archival.
 import asyncio
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 from secretary import TranscriptionEngine, SecretaryEngine, ArchivalSystem
 
@@ -20,7 +20,7 @@ async def run_example_session():
     
     # Initialize components
     archival = ArchivalSystem()
-    session_id = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    session_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     session_dir = archival.create_session_directory(session_id)
     
     logger.info(f"Starting secretary session: {session_id}")

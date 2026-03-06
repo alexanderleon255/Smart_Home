@@ -1,6 +1,6 @@
 # Smart Home — Current State
 
-**Last Updated:** 2026-03-06 (Rev 7.0 — All 4 assessed bugs fixed; P6-07 Modelfile done; P7-03 wired; web_search/create_reminder removed)  
+**Last Updated:** 2026-03-06 (Rev 8.0 — P1-08 backup; P3 SUPERSEDED; P9 chat tier packs 100%; Bug #5 httpx pooling; Bug #7 datetime.utcnow; 87%)  
 **Purpose:** What is installed, current phase, blockers, next actions  
 **Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
@@ -73,13 +73,13 @@
 
 ## Current Phase
 
-**Active work:** Incremental closure of P6 + P9  
-**Overall progress:** 42/62 items complete (68%)  
-**Phases 100% done:** P2 (AI Sidecar), P4 (Security), P7 (Secretary — fully wired), P8 (Advanced AI — all bugs fixed)  
-**Phases >50% done:** P1 (67%), P6 (90% — only live testing remains)  
-**Phases not started:** P3 (superseded by P6), P5 (camera hardware not acquired), P9 (Chat Tier Packs)  
+**Active work:** P6-10 live voice testing (last non-HW-blocked item)  
+**Overall progress:** 54/62 items complete (87%)  
+**Phases 100% done:** P2 (AI Sidecar), P4 (Security), P7 (Secretary), P8 (Advanced AI), P9 (Chat Tier Packs)  
+**Phases >50% done:** P1 (78%), P6 (90% — only live testing remains)  
+**Phases not active:** P3 (SUPERSEDED by P6), P5 (camera hardware not acquired)  
 **Main blockers:** Zigbee USB dongle (P1-04), camera hardware (P5), iPhone SonoBus peer (P6-10)  
-**Total tests:** 249 passing (~26s)  
+**Total tests:** 249 passing, 0 warnings (~24s)  
 **Total LOC:** 12,968 (9,582 source + 3,386 test)
 
 ---
@@ -91,8 +91,8 @@
 | Source LOC | 9,582 |
 | Test LOC | 3,386 |
 | Total LOC | 12,968 |
-| Total tests | 249 (all passing) |
-| Test time | ~26 seconds |
+| Total tests | 249 (all passing, 0 warnings) |
+| Test time | ~24 seconds |
 | Packages | 11 |
 | Python version | 3.12.2 (canonical) |
 
@@ -118,23 +118,23 @@
 | ~~HIGH~~ | `secretary/core/transcription.py` | ~~Hardcoded placeholder~~ | ✅ `start_streaming()` + `process_audio_file()` wired to real whisper.cpp (commits 67efd8f, 0dee927) |
 | ~~MEDIUM~~ | `memory/context_builder.py:174` | ~~`search_conversations()` didn't exist~~ | ✅ → `search()` (commit 8769d5f) |
 | ~~MEDIUM~~ | `memory/vector_store.py` | ~~ID collisions via hash()~~ | ✅ → `uuid4()` (commit 8769d5f) |
-| ~~LOW~~ | `tool_broker/tools.py` + `main.py` | ~~`web_search`, `create_reminder` unimplemented~~ | ✅ Removed from REGISTERED_TOOLS + dead branches removed (commit 0dee927) |
-
+| ~~LOW~~ | `tool_broker/tools.py` + `main.py` | ~~`web_search`, `create_reminder` unimplemented~~ | ✅ Removed from REGISTERED_TOOLS + dead branches removed (commit 0dee927) || ~~MEDIUM~~ | 5 files (`ha_client`, `llm_client`, `secretary`, `satellites`, `discovery`) | ~~httpx.AsyncClient per-request overhead~~ | ✅ Lazy persistent `_get_client()` + `close()` pattern (this session) |
+| ~~LOW~~ | 5 files (`archival`, `secretary`, `transcription`, `schemas`, `example_usage`) | ~~`datetime.utcnow()` deprecation~~ | ✅ → `datetime.now(timezone.utc)` — 0 pytest warnings (this session) |
 ---
 
 ## Phase Completion Summary
 
 | Phase | % | Key Achievement |
 |-------|---|-----------------|
-| P1 Hub Setup | 67% | Pi running with HA Docker, MQTT, Tailscale |
+| P1 Hub Setup | 78% | Pi running with HA Docker, MQTT, Tailscale, backup script |
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
-| P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
+| P3 Voice (HA) | SUPERSEDED | Formally superseded by P6 Jarvis (all 6 items mapped) |
 | P4 Security | 100% | ACL/firewall artifacts + monitoring alerts + audit reports + TTS shell fix |
 | P5 Cameras | 0% | Camera hardware not acquired |
 | P6 Jarvis Voice | 90% | SonoBus + PipeWire + whisper + Piper installed; Modelfile DEC-008 done |
 | P7 Secretary | 100% | start_streaming() + process_audio_file() both wired to real whisper.cpp |
 | P8 Advanced AI | 100% | Vector store UUID4 IDs; context_builder search() call fixed |
-| P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling |
+| P9 Chat Tier Packs | 100% | Generator + verifier + 5 output files in GENERATED_CHAT/ |
 
 ---
 
@@ -153,19 +153,18 @@
 ### Tier 1: Operational (no blockers)
 1. P6-10 live voice testing — needs iPhone SonoBus peer
 2. Apply Tailscale ACLs + device tags in admin console (manual ops)
-3. P9 Chat Tier Packs (5 items — pure tooling/docs, no code dependencies)
+3. Upload chat tier packs to ChatGPT Projects (manual ops)
 
 ### Tier 2: Harden (reliability)
-4. Persistent httpx.AsyncClient pooling in `tool_broker/ha_client.py`
-5. `POST /v1/process/stream` SSE endpoint
-6. Async `tool_broker_client.py`
-7. Complexity classifier tests
-8. Periodic health watchdog with notifications
+4. `POST /v1/process/stream` SSE endpoint
+5. Async `tool_broker_client.py`
+6. Complexity classifier tests
+7. Periodic health watchdog with notifications
 
 ### Tier 3: Hardware-blocked
-9. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
-10. P5 Camera integration (awaiting DEC-005 hardware decision)
-11. P3 HA Voice Pipeline (low priority — superseded by P6)
+8. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
+9. P5 Camera integration (awaiting DEC-005 hardware decision)
+10. P3 HA Voice Pipeline (low priority — superseded by P6)
 
 ---
 

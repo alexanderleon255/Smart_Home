@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
@@ -113,7 +113,7 @@ class TranscriptionEngine:
             
             if text:
                 chunk = TranscriptionChunk(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     text=text,
                     confidence=0.95  # whisper.cpp doesn't provide per-word confidence
                 )
@@ -150,7 +150,7 @@ class TranscriptionEngine:
         Returns:
             Concatenated transcript text from window
         """
-        cutoff_time = datetime.utcnow().timestamp() - window_seconds
+        cutoff_time = datetime.now(timezone.utc).timestamp() - window_seconds
         
         recent_chunks = [
             chunk for chunk in self.transcript_buffer

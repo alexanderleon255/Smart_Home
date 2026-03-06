@@ -1,10 +1,120 @@
-# Smart Home Decisions Log
+> **Smart Home Chat Tier Pack** — Generated 2026-03-06 13:33 UTC
+> Authority: AI_CONTEXT/TIERS/chat_tiers.yml
+> Do not edit manually. Regenerate with: `python generate_context_pack.py --chat`
 
-**Created:** 2026-03-02  
-**Last Updated:** 2026-03-06  
-**Purpose:** Locked decisions, non-negotiables, rejected options
+# CHAT_T0_BOOT
+
+**Purpose:** Instant alignment + guardrails  
+**Generated:** 2026-03-06 13:33 UTC  
+**Tier:** t0_boot
+
+## Project Summary
+
+Smart Home is a local-first home automation platform with separated compute:
+- Raspberry Pi 5 → Deterministic automation hub (Home Assistant)
+- MacBook Air M1 → AI sidecar (Ollama + Tool Broker)
+- Tailscale → Secure mesh VPN (no public ports)
+Stack: FastAPI, Ollama (Llama 3.1:8b + qwen2.5:1.5b), Home Assistant, Python 3.10+
+
+## How to Request Deeper Context
+
+- Say "Mount CHAT_T1_CORE" for stable architecture overview
+- Say "Mount CHAT_T2_BUILD" for implementation details
+- Say "Mount CHAT_T3_DEEP" for full corpus analysis
+- Never auto-escalate — wait for explicit request
 
 ---
+
+<!-- Source: AI_CONTEXT/SOURCES/chat_operating_protocol.md -->
+
+# Smart Home — Chat Operating Protocol
+
+**Revision:** 1.0  
+**Created:** 2026-03-06  
+**Purpose:** Define how AI assistants should operate in ChatGPT threads using the Chat Tier Pack system.
+
+---
+
+## 1. Thread Startup
+
+When Alex starts a new ChatGPT thread in the Smart Home project:
+
+1. **Mount tiers explicitly.** Alex will say something like:  
+   > "Use CHAT_T0_BOOT and CHAT_T1_CORE as authoritative. We are working on Phase X."
+2. **Confirm invariants.** The assistant must respond with:
+   - Confirmed non-negotiables (see §3)
+   - Restated phase objective
+   - 1–2 short clarifying questions if needed
+3. **Do not assume outside the mounted packs.** If information isn't in a mounted tier, ask for it or request a tier escalation.
+
+---
+
+## 2. Tier Escalation
+
+- **Default:** Most threads run on T0 + T1 only (< 4000 tokens of context).
+- **Build mode:** Alex says "Mount CHAT_T2_BUILD" → implementation detail becomes available.
+- **Deep mode:** Alex says "Mount CHAT_T3_DEEP" → full corpus for research/analysis.
+- **Never auto-escalate.** The assistant must not mount deeper tiers unless explicitly told.
+
+---
+
+## 3. Non-Negotiables (Invariants)
+
+These are locked decisions. Do not re-suggest alternatives:
+
+| # | Constraint | Decided |
+|---|-----------|---------|
+| 1 | FOSS only — no proprietary cloud services for core functionality | 2026-03-02 |
+| 2 | Home Assistant is the authoritative automation hub | 2026-03-02 |
+| 3 | AirPods audio routes through iPhone (SonoBus → iPhone → AirPods) | 2026-03-04 |
+| 4 | LLM scope: Llama 3.1:8b on Mac sidecar, qwen2.5:1.5b on Pi | 2026-03-03 |
+| 5 | Claude does code (VS Code); ChatGPT does planning/analysis | 2026-03-02 |
+| 6 | Raspberry Pi 5 runs Debian Bookworm (not HAOS) | 2026-03-03 |
+| 7 | All secrets stay in env vars — never in code or LLM context | 2026-03-02 |
+| 8 | Tool Broker is the only LLM→HA interface (no direct HA API from LLM) | 2026-03-02 |
+| 9 | DEC-008 tool call format: `{"text": "...", "tool_calls": [...]}` | 2026-03-05 |
+| 10 | ChromaDB for vector storage (DEC-007) | 2026-03-02 |
+
+---
+
+## 4. How to Handle Ambiguity
+
+1. **Ask short clarifying questions** (max 2), then proceed.
+2. **Never block on ambiguity** — pick the most reasonable default and state the assumption.
+3. **If a decision seems locked already**, check the tier packs before asking.
+
+---
+
+## 5. Output Conventions
+
+- **Downloadable markdown:** When producing specs, plans, or documents > 1 page, output as a downloadable `.md` file.
+- **Code:** Offer code in fenced blocks. For multi-file changes, list files affected first.
+- **Tables:** Use Markdown tables for structured data (decisions, comparisons, inventories).
+- **Commit messages:** Format as `[Smart Home] Pn-XX: Description` when suggesting commits.
+
+---
+
+## 6. Heavy Thread Warning Rule
+
+If a thread exceeds ~20 exchanges or becomes disorganized:
+- The assistant should suggest: "This thread is getting heavy. Consider starting a fresh thread and mounting T0+T1."
+- Creating a brief handoff summary for the new thread is encouraged.
+
+---
+
+## 7. What Alex Expects
+
+- **Speed over perfection.** Ship working solutions; iterate later.
+- **No hedging.** If you're confident, state it directly. If unsure, say so briefly and propose the best option.
+- **Track against the roadmap.** All work should reference Pn-XX item IDs.
+- **Security first.** Never suggest patterns that expose secrets, allow arbitrary shell access, or bypass the Tool Broker.
+
+---
+
+END OF CHAT OPERATING PROTOCOL
+
+
+<!-- Source: AI_CONTEXT/SOURCES/decisions_log.md [locked_only] -->
 
 ## Locked Decisions (Non-Negotiable)
 
@@ -93,73 +203,29 @@
 **Rationale:** HAOS is an appliance OS that restricts package installation. Running Ollama, whisper.cpp, Piper TTS, SonoBus, PipeWire, and Tool Broker natively on the Pi requires a full Linux OS. Debian Bookworm provides package management, systemd services, and full control.  
 **Trade-off:** Lose HAOS add-on ecosystem and one-click updates. Gain full Linux control.
 
-### DEC-015: Tool List Redesign — Granular HA Tools
-**Decided:** 2026-03-06  
-**Decision:** Replace the generic tool list (smart_home_control, calculate, convert_units, read_file, write_file) with a granular set of Home Assistant-specific tools: `ha_service_call`, `ha_get_state`, `ha_list_entities`, `web_search`, `create_reminder`.  
-**Rationale:** Generic tools added coupling to Ollama capabilities (calculator, file I/O) that blur the boundary between HA control and general computation. Granular HA tools make the scope explicit: the LLM is for smart home automation and device queries, not general computing. User asks for math, the assistant does it conversationally without a tool call. This keeps the tool surface small and auditable.  
-**Impact:** Utility tools (calculate, convert_units, read_file, write_file) have been intentionally deferred to a future phase. The Vision Document specs will be updated to reflect the new tool list. The old generic tool names are no longer called by the system prompt.  
-**Non-negotiable:** For this phase (P7 completion, P8 completion, current state). Utility tools may be added in future phases if concrete use cases justify them.
-
-### DEC-016: Ollama num_ctx Resource Governance
-**Decided:** 2026-03-06  
-**Decision:** Explicitly set `num_ctx: 4096` in all Ollama API calls via the options dictionary in `tool_broker/llm_client.py`.  
-**Rationale:** DEC-008 requires conversation-first LLM responses, which rely on context window. Setting an explicit limit ensures predictable memory usage: Pi 5 (8GB) can safely handle 4096 context, Mac (8GB+ typically) can as well. Without explicit `num_ctx`, Ollama uses the model default, which may be unbounded for some models, causing memory pressure or OOM kills during multi-turn conversations or long context retrieval.  
-**Specification:** `num_ctx=4096` is the resource-constrained default. Can be overridden via env var `LLM_NUM_CTX` in future if needed.  
-**Non-negotiable:** Yes — this is a safety requirement for stable, long-running home automation.
-
-### DEC-017: Confirmation Protocol — Inline Flags vs. Standalone Responses
-**Decided:** 2026-03-06  
-**Decision:** High-risk action confirmations use inline `requires_confirmation: boolean` flags on `EmbeddedToolCall` objects, not standalone `ConfirmationRequest` JSON responses.  
-**Rationale:** DEC-008 (Conversation-First) dictates that every LLM response contains `text` + optional `tool_calls` array. The confirmed-decision is to embed confirmation requirements in the tool call object itself (`requires_confirmation: true`), not split the response into a separate type. This keeps the response structure unified and simpler for frontends to handle.  
-**Previous approach (Interface Contracts §8):** Standalone type: `{"type": "confirmation_request", "action": "lock_all_doors", "summary": "...", "risk_level": "medium"}`  
-**Current approach (conversation-first):** Inline flag: `{"text": "...", "tool_calls": [{"tool_name": "...", "requires_confirmation": true, ...}]}`  
-**Backward Compatibility:** Legacy `process_legacy()` in `llm_client.py` still converts to old format for clients that need it.  
-**Non-negotiable:** For conversation-first mode (primary API). Legacy mode supported for backward compat only.
-
-### DEC-018: LLM Temperature — Dual-Mode Tuning
-**Decided:** 2026-03-06  
-**Decision:** Tool Broker (server-side LLM) uses temperature 0.3 for deterministic JSON output; Jarvis Modelfile (conversational mode) uses temperature 0.6 for natural dialogue.  
-**Rationale:** DEC-008's structured tool calls (`JSON` format with exact field names) require low temperature for reliability. Temperature 0.3 minimizes hallucinations and formatting errors in the `tool_calls` array. However, the conversational `text` field benefits from slightly higher temperature (0.6) for natural, varied responses.  
-**Spec reconciliation:** Vision Modelfile specifies 0.6; Jarvis Architecture v2.0 specifies 0.5-0.7 range. The Tool Broker's 0.3 is intentionally lower for JSON reliability, not a violation of spec — it's a safety enhancement for structured output.  
-**Implementation:** `tool_broker/config.py`: `LLM_TEMPERATURE = 0.3` (fixed). `jarvis_audio/Modelfile.jarvis`: `PARAMETER temperature 0.6` (conversational).  
-**Non-negotiable:** No — 0.3 can be adjusted if JSON reliability improves or higher naturalness is needed; configurable via `LLM_TEMPERATURE` env var.
-
 ---
 
-## Pending Decisions
+<!-- Source: AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md [executive_summary] -->
 
-| ID | Topic | Options | Status |
-|----|-------|---------|--------|
-| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | PENDING (Zigbee USB dongle not purchased) |
-| DEC-P02 | Z-Wave Dongle | Zooz ZST10, Aeotec Z-Stick | PENDING |
-| DEC-P03 | Web Search Backend | Local SearXNG, DuckDuckGo API | PENDING |
-| DEC-P04 | Camera Hardware | Reolink, Amcrest, Ubiquiti | PENDING |
-| DEC-P06 | Vector Database | ChromaDB, manual embeddings | ✅ DECIDED → ChromaDB (see DEC-007 in tracker) |
+## Executive Summary
 
----
+| Phase | Name | Items | Complete | Status |
+|-------|------|-------|----------|--------|
+| P1 | Hub Setup | 9 | 6 | 🟢 67% |
+| P2 | AI Sidecar | 8 | 8 | 🟢 100% |
+| P3 | Voice Pipeline (Pi) | 6 | 6 | 🔶 SUPERSEDED |
+| P4 | Security Hardening | 6 | 6 | 🟢 100% |
+| P5 | Camera Integration | 5 | 0 | 🔴 0% |
+| P6 | Jarvis Real-Time Voice | 10 | 9 | 🟢 90% |
+| P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
+| P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
+| P9 | Chat Tier Packs | 5 | 0 | 🔴 0% |
+| **TOTAL** | | **62** | **48** | **🟡 77%** |
 
-## Rejected Options
-
-### REJ-001: Cloud-Based LLM (GPT-4, Claude)
-**Rejected:** 2026-03-02  
-**Reason:** Violates local-first principle. Latency, cost, privacy concerns for always-on home system.
-
-### REJ-002: Direct LLM-to-HA Control
-**Rejected:** 2026-03-02  
-**Reason:** No validation layer, no policy enforcement, no audit trail. Security risk.
-
-### REJ-003: Wildcard CORS
-**Rejected:** 2026-03-02  
-**Reason:** Security risk. Any browser tab could make requests to broker.
-
-### REJ-004: Home Assistant OS (HAOS) on Pi
-**Rejected:** 2026-03-03  
-**Reason:** HAOS is an appliance OS that restricts native package installation. Cannot run Ollama, whisper.cpp, Piper, SonoBus, or PipeWire natively. See DEC-014.
-
-### REJ-005: pw-jack Wrapper for SonoBus
-**Rejected:** 2026-03-04  
-**Reason:** `pw-jack sonobus --headless` does not reliably intercept dlopen() calls from JUCE. LD_LIBRARY_PATH pointing to PipeWire's JACK shim directory works correctly. See DEC-012.
+**Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
+**Tests:** 249 passing (pytest, ~26s)  
+**Code:** 12,968 LOC (9,582 source + 3,386 test) across 11 packages  
+**Infrastructure:** HA + Docker + Tailscale + Ollama (local qwen2.5:1.5b) + Tool Broker live on Pi  
+**Assessment Grade:** B+ (2026-03-04 full codebase review)
 
 ---
-
-**END OF DECISIONS LOG**

@@ -1,0 +1,202 @@
+# Chat Tier Pack Configuration
+# Defines which source documents are included in each tier pack.
+#
+# Usage: generate_context_pack.py --chat reads this file to build
+#        AI_CONTEXT/GENERATED_CHAT/CHAT_T{0..3}*.md + CHAT_INDEX.md
+#
+# Paths are relative to the repository root.
+
+# Global settings
+settings:
+  output_dir: "AI_CONTEXT/GENERATED_CHAT"
+  staleness_days: 7
+  # Approximate token-to-line ratio (1 token ≈ 0.75 words ≈ 3 chars)
+  # Used for soft budget warnings, not hard enforcement
+  chars_per_token: 4
+
+# Shared preamble injected at the top of every tier pack
+shared:
+  header: |
+    > **Smart Home Chat Tier Pack** — Generated {timestamp}
+    > Authority: AI_CONTEXT/TIERS/chat_tiers.yml
+    > Do not edit manually. Regenerate with: `python generate_context_pack.py --chat`
+
+# Tier definitions
+tiers:
+  t0_boot:
+    name: "CHAT_T0_BOOT"
+    purpose: "Instant alignment + guardrails"
+    target_tokens: 1500
+    max_tokens: 4000
+    sources:
+      - path: "AI_CONTEXT/SOURCES/chat_operating_protocol.md"
+        include: "full"
+      - path: "AI_CONTEXT/SOURCES/decisions_log.md"
+        include: "locked_only"  # Only "Locked Decisions" section
+      - path: "AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md"
+        include: "executive_summary"  # Only the summary table
+    sections:
+      - name: "Project Summary"
+        content: |
+          Smart Home is a local-first home automation platform with separated compute:
+          - Raspberry Pi 5 → Deterministic automation hub (Home Assistant)
+          - MacBook Air M1 → AI sidecar (Ollama + Tool Broker)
+          - Tailscale → Secure mesh VPN (no public ports)
+          Stack: FastAPI, Ollama (Llama 3.1:8b + qwen2.5:1.5b), Home Assistant, Python 3.10+
+      - name: "How to Request Deeper Context"
+        content: |
+          - Say "Mount CHAT_T1_CORE" for stable architecture overview
+          - Say "Mount CHAT_T2_BUILD" for implementation details
+          - Say "Mount CHAT_T3_DEEP" for full corpus analysis
+          - Never auto-escalate — wait for explicit request
+
+  t1_core:
+    name: "CHAT_T1_CORE"
+    purpose: "Stable architecture overview"
+    target_tokens: 4000
+    max_tokens: 6000
+    includes_lower: true  # Inherits T0 context (assistant already has T0 mounted)
+    sources:
+      - path: "AI_CONTEXT/SOURCES/current_state.md"
+        include: "full"
+      - path: "AI_CONTEXT/SOURCES/decisions_log.md"
+        include: "full"
+      - path: "AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md"
+        include: "executive_summary"
+    sections:
+      - name: "Architecture Overview"
+        content: |
+          ```
+          User Voice/Text → Tool Broker → Ollama LLM → Validated Tool Call → Home Assistant
+          ```
+          The LLM is a router, not an actuator. It outputs structured JSON tool calls
+          validated before execution.
+
+          Layers:
+          1. Home Assistant (Docker) — Device control, automations, entity state
+          2. Tool Broker (FastAPI) — Validation, policy gate, audit, LLM routing
+          3. Ollama LLM — Local qwen2.5:1.5b (Pi) + sidecar llama3.1:8b (Mac)
+          4. Jarvis Voice — whisper.cpp STT, Piper TTS, SonoBus audio bridge
+          5. Secretary — Autonomous meeting transcription + memory updates
+          6. Memory — 4-layer: structured state, event log, vector store, context builder
+      - name: "Glossary"
+        content: |
+          - **Tool Broker**: FastAPI gateway between LLM and HA (port 8000)
+          - **PolicyGate**: Security module requiring confirmation for high-risk actions
+          - **DEC-008 Format**: `{"text": "...", "tool_calls": [{"tool_name": ..., "arguments": ..., "confidence": ...}]}`
+          - **Tiered LLM**: Auto-routing between Pi (simple) and Mac (complex) models
+          - **SonoBus**: Open-source audio bridge (iPhone mic → Pi processing → iPhone speaker)
+          - **PipeWire**: Linux audio server with virtual devices for Jarvis audio routing
+
+  t2_build:
+    name: "CHAT_T2_BUILD"
+    purpose: "Implementation-facing specification"
+    target_tokens: 8000
+    max_tokens: 12000
+    includes_lower: true
+    sources:
+      - path: "AI_CONTEXT/SOURCES/current_state.md"
+        include: "full"
+      - path: "AI_CONTEXT/SOURCES/decisions_log.md"
+        include: "full"
+      - path: "AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md"
+        include: "full"
+      - path: "References/Explicit_Interface_Contracts_v1.0.md"
+        include: "full"
+      - path: "References/Jarvis_Assistant_Architecture_v2.0.md"
+        include: "full"
+    sections:
+      - name: "Repository Structure"
+        content: |
+          Smart_Home/
+          ├── tool_broker/          # FastAPI core (main.py, schemas.py, tools.py, validators.py, policy_gate.py, ha_client.py, llm_client.py)
+          ├── jarvis/               # Voice assistant (voice_loop.py, wake_word_detector.py, stt_client.py, tts_controller.py, barge_in.py)
+          ├── jarvis_audio/         # Audio infrastructure (recording.py, stt.py, tts.py, wake_word.py)
+          ├── secretary/            # Autonomous meeting secretary (core/secretary.py, core/transcription.py, core/archival.py)
+          ├── memory/               # 4-layer memory (structured_state.py, event_log.py, vector_store.py, context_builder.py)
+          ├── dashboard/            # Dash management dashboard (app.py, process_manager.py)
+          ├── cameras/              # Camera event processing
+          ├── satellites/           # ESP32 satellite device discovery
+          ├── digests/              # Daily/weekly digest generators
+          ├── patterns/             # Behavioral pattern learning
+          ├── deploy/               # Systemd units, bootstrap.sh, security scripts, backup.sh
+          ├── docker/               # Docker Compose (HA + Mosquitto + Pi-hole)
+          ├── tests/                # pytest suite (249+ tests)
+          └── AI_CONTEXT/           # AI agent context, memory, session artifacts
+      - name: "Development Workflow"
+        content: |
+          ```bash
+          # Activate venv
+          source .venv/bin/activate
+
+          # Run tests
+          python -m pytest tests/ -v
+
+          # Run Tool Broker (dev)
+          uvicorn tool_broker.main:app --reload --port 8000
+
+          # Run Dashboard
+          python -m dashboard.app
+
+          # Commit format
+          git commit -m "[Smart Home] Pn-XX: Description"
+          ```
+
+  t3_deep:
+    name: "CHAT_T3_DEEP"
+    purpose: "Full corpus for deep analysis"
+    target_tokens: 30000
+    max_tokens: 50000
+    includes_lower: true
+    sources:
+      - path: "AI_CONTEXT/SOURCES/vision_document.md"
+        include: "full"
+      - path: "AI_CONTEXT/SOURCES/current_state.md"
+        include: "full"
+      - path: "AI_CONTEXT/SOURCES/decisions_log.md"
+        include: "full"
+      - path: "AI_CONTEXT/SOURCES/chat_operating_protocol.md"
+        include: "full"
+      - path: "AI_CONTEXT/SESSION_ARTIFACTS/PROGRESS_TRACKERS/smart_home_progress_tracker.md"
+        include: "full"
+      - path: "AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md"
+        include: "full"
+      - path: "References/Smart_Home_Master_Architecture_Spec_Rev_1_0.md"
+        include: "full"
+      - path: "References/Smart_Home_Threat_Model_Analysis_Rev_1_0.md"
+        include: "full"
+      - path: "References/Jarvis_Assistant_Architecture_v2.0.md"
+        include: "full"
+      - path: "References/Explicit_Interface_Contracts_v1.0.md"
+        include: "full"
+      - path: "References/Maximum_Push_Autonomous_Secretary_Spec_v1.0.md"
+        include: "full"
+      - path: "References/Chat_Tier_Packs_Architecture_v1.0.md"
+        include: "full"
+
+# Index page configuration
+index:
+  name: "CHAT_INDEX"
+  content: |
+    # Smart Home — Chat Tier Pack Index
+
+    ## Available Packs
+
+    | Pack | Purpose | Size | Mount Command |
+    |------|---------|------|---------------|
+    | `CHAT_T0_BOOT` | Instant alignment + guardrails | ~1000 tokens | Default (always active) |
+    | `CHAT_T1_CORE` | Stable architecture overview | ~3000 tokens | "Mount CHAT_T1_CORE" |
+    | `CHAT_T2_BUILD` | Implementation specs + contracts | ~8000 tokens | "Mount CHAT_T2_BUILD" |
+    | `CHAT_T3_DEEP` | Full corpus for deep analysis | ~30000 tokens | "Mount CHAT_T3_DEEP" |
+
+    ## Quick Start
+
+    In a new ChatGPT thread:
+    > "Use CHAT_T0_BOOT and CHAT_T1_CORE as authoritative. We are working on [topic]."
+
+    ## Regeneration
+
+    ```bash
+    python generate_context_pack.py --chat
+    python verify_context_pack.py --chat
+    ```

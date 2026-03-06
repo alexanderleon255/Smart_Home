@@ -35,6 +35,7 @@ class CameraEventProcessor:
         self.model = model
         self.event_log_dir = Path(event_log_dir).expanduser()
         self.event_log_dir.mkdir(parents=True, exist_ok=True)
+        self._client: Optional[httpx.AsyncClient] = None
         
         # Detection categories
         self.categories = {
@@ -45,6 +46,18 @@ class CameraEventProcessor:
             "unknown": []
         }
     
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return persistent httpx client, creating lazily."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
     async def analyze_image(
         self,
         image_path: str,
@@ -77,24 +90,24 @@ class CameraEventProcessor:
             image_data = base64.b64encode(f.read()).decode('utf-8')
         
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{self.ollama_url}/api/generate",
-                    json={
-                        "model": self.model,
-                        "prompt": prompt,
-                        "images": [image_data],
-                        "stream": False
-                    }
-                )
-                response.raise_for_status()
-                result = response.json()
-                
-                return {
-                    "description": result.get("response", ""),
+            client = self._get_client()
+            response = await client.post(
+                f"{self.ollama_url}/api/generate",
+                json={
                     "model": self.model,
-                    "timestamp": datetime.now().isoformat()
+                    "prompt": prompt,
+                    "images": [image_data],
+                    "stream": False
                 }
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            return {
+                "description": result.get("response", ""),
+                "model": self.model,
+                "timestamp": datetime.now().isoformat()
+            }
         except Exception as e:
             print(f"Error analyzing image: {e}")
             return {
