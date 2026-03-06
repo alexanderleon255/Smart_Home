@@ -39,8 +39,9 @@ class WakeWordDetector:
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
         
-        # Load wake word model
-        self.model = Model(wakeword_models=[model_name])
+        # Load wake word model (openwakeword defaults to built-in models)
+        # Note: model_name parameter is stored for logging but Model() uses defaults
+        self.model = Model()
         
         # Audio stream
         self.audio = pyaudio.PyAudio()
