@@ -75,33 +75,49 @@ def _log(kind: str, data: dict):
 # Pi-hole API client
 # ---------------------------------------------------------------------------
 
+PIHOLE_ADMIN_PASSWORD = os.getenv("PIHOLE_ADMIN_PASSWORD", "pihole_admin_2026")
+
+# Heuristics for detecting IoT/Printer devices by domain patterns
+PRINTER_KEYWORDS = {
+    "hp", "epson", "canon", "xerox", "ricoh", "kyocera", "lexmark", "brother",
+    "printer", "print", "mfp", "multifunction", "scan", "scanner", "ipp",
+    "airprint", "bonjour", "mdns", "local"
+}
+
 def get_pihole_stats() -> dict:
-    """Fetch Pi-hole statistics. Returns empty dict on error."""
+    """Check Pi-hole web UI connectivity. Full API integration pending v6 endpoint discovery."""
     try:
-        resp = httpx.get(f"{PIHOLE_URL}/admin/api.php?summaryRaw", timeout=3.0)
+        # Simple connectivity check to the web UI
+        resp = httpx.get(f"{PIHOLE_URL}/admin/", timeout=3.0, follow_redirects=True)
         if resp.status_code == 200:
-            data = resp.json()
+            # Service is running — placeholder stats
             return {
-                "status": data.get("status", "unknown"),
-                "domains_blocked": int(data.get("domains_being_blocked", 0)),
-                "queries_today": int(data.get("dns_queries_today", 0)),
-                "ads_blocked_today": int(data.get("ads_blocked_today", 0)),
-                "ads_percentage_today": float(data.get("ads_percentage_today", 0)),
+                "status": "enabled",
+                "domains_blocked": 0,
+                "queries_today": 0,
+                "ads_blocked_today": 0,
+                "ads_percentage_today": 0,
+                "api_note": "Web UI accessible. API queries pending.",
             }
     except Exception:
         pass
-    return {}
+    
+    # Fallback: service unavailable
+    return {"status": "unavailable", "message": "Pi-hole web UI unreachable"}
 
 
-def get_pihole_blocked_clients() -> list:
-    """Fetch recently blocked queries (for device alerts). Returns empty list on error."""
-    try:
-        resp = httpx.get(f"{PIHOLE_URL}/admin/api.php?recentBlocked", timeout=3.0)
-        if resp.status_code == 200:
-            return resp.json()  # List of recently blocked domains
-    except Exception:
-        pass
+def get_pihole_blocked_domains() -> list:
+    """Pi-hole API v6 endpoint structure is pending discovery. Returns empty list for now."""
+    # TODO: Update to match Pi-hole v6 API once endpoints are confirmed
     return []
+
+
+def detect_printer_blocks() -> dict:
+    """Scan recently blocked domains for printer/IoT device patterns. Pending API integration.
+    TODO: Once Pi-hole v6 API is integrated, this will check blocked_domains() for PRINTER_KEYWORDS.
+    """
+    # No blocked domains available until API integration is complete
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -1052,17 +1068,22 @@ def update_tailscale(n, _clicks):
     prevent_initial_call=False,
 )
 def update_pihole(n, _clicks):
-    """Poll Pi-hole stats and render DNS filtering panel."""
+    """Poll Pi-hole stats and render DNS filtering panel with device alerts."""
     stats = get_pihole_stats()
     
-    if not stats:
+    # Handle connectivity errors gracefully
+    if not stats or "unavailable" in str(stats.get("status", "")):
         return [
             html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=[
                 html.Span("●", style={"color": "#f38ba8"}),
-                html.Span("Pi-hole offline or unreachable", style={"fontSize": "13px"}),
+                html.Span("Pi-hole web UI unreachable", style={"fontSize": "13px"}),
             ]),
-            html.P(f"Expected at {PIHOLE_URL}/admin", style={"fontSize": "12px", "color": "#6c7086", "margin": "8px 0 0 0"}),
+            html.P(
+                f"Check that Docker container is running: docker ps | grep pihole",
+                style={"fontSize": "12px", "color": "#6c7086", "margin": "8px 0 0 0"}
+            ),
         ]
+
     
     status = stats.get("status", "unknown")
     status_color = "#22c55e" if status == "enabled" else "#f38ba8"
@@ -1071,125 +1092,164 @@ def update_pihole(n, _clicks):
     ads_blocked = stats.get("ads_blocked_today", 0)
     ads_pct = stats.get("ads_percentage_today", 0)
     
-    # Educational explanation of what Pi-hole is doing
-    explanation = "Pi-hole intercepts DNS queries (when your devices ask 'what IP is ads.google.com?') and returns nothing for domains on blocklists."
+    # Educational explanation of what Pi-hole does
+    api_status_note = ""
+    if stats.get("api_note"):
+        api_status_note = (
+            "📡 Full statistics (queries, blocks, top domains) require Pi-hole API v6 integration. "
+            "Web UI is accessible; API endpoints are pending discovery. "
+        )
+    
+    explanation = (
+        "Pi-hole intercepts DNS requests (e.g., your printer asking for 'update.manufacturer.com') "
+        "and blocks queries matching ~1.5M ad/tracking domains. "
+        "If a device stops working, it may be blocked — check the whitelist in the Admin panel. "
+    )
+    if api_status_note:
+        explanation = api_status_note + explanation
     
     children = []
     
     # Status header
-    children.append(html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px"}, children=[
-        html.Strong("Status", style={"fontSize": "13px"}),
-        html.Span(status.upper(), style={
-            "fontSize": "11px",
-            "fontWeight": "600",
-            "color": status_color,
-            "background": f"{status_color}22",
-            "padding": "3px 10px",
-            "borderRadius": "10px",
-        }),
-    ]))
+    children.append(html.Div(
+        style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px"},
+        children=[
+            html.Strong("Status", style={"fontSize": "13px"}),
+            html.Span(status.upper(), style={
+                "fontSize": "11px",
+                "fontWeight": "600",
+                "color": status_color,
+                "background": f"{status_color}22",
+                "padding": "3px 10px",
+                "borderRadius": "10px",
+            }),
+        ]
+    ))
     
     # Stats grid
-    children.append(html.Div(style={
-        "display": "grid",
-        "gridTemplateColumns": "1fr 1fr",
-        "gap": "12px",
-        "background": "#181825",
-        "borderRadius": "8px",
-        "padding": "12px",
-        "marginBottom": "12px",
-    }, children=[
-        # Queries today
-        html.Div([
-            html.Div(f"{queries_today:,}", style={"fontSize": "24px", "fontWeight": "700", "color": "#89b4fa"}),
-            html.Div("DNS Queries Today", style={"fontSize": "11px", "color": "#6c7086", "marginTop": "2px"}),
-        ]),
-        # Ads blocked
-        html.Div([
-            html.Div(f"{ads_blocked:,}", style={"fontSize": "24px", "fontWeight": "700", "color": "#a6e3a1"}),
-            html.Div("Ads Blocked Today", style={"fontSize": "11px", "color": "#6c7086", "marginTop": "2px"}),
-        ]),
-    ]))
-    
-    # Block percentage
-    children.append(html.Div(style={"marginBottom": "12px"}, children=[
-        html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "4px"}, children=[
-            html.Span("Block Rate", style={"fontSize": "12px", "color": "#6c7086"}),
-            html.Span(f"{ads_pct:.1f}%", style={"fontSize": "13px", "fontWeight": "600", "color": "#a6e3a1"}),
-        ]),
-        html.Div(style={
-            "height": "6px",
+    children.append(html.Div(
+        style={
+            "display": "grid",
+            "gridTemplateColumns": "1fr 1fr",
+            "gap": "12px",
             "background": "#181825",
-            "borderRadius": "3px",
-            "overflow": "hidden",
-        }, children=[
-            html.Div(style={
-                "width": f"{min(ads_pct, 100):.1f}%",
-                "height": "100%",
-                "background": "linear-gradient(90deg, #a6e3a1, #89b4fa)",
-            }),
-        ]),
-    ]))
+            "borderRadius": "8px",
+            "padding": "12px",
+            "marginBottom": "12px",
+        },
+        children=[
+            html.Div([
+                html.Div(f"{queries_today:,}", style={"fontSize": "24px", "fontWeight": "700", "color": "#89b4fa"}),
+                html.Div("DNS Queries Today", style={"fontSize": "11px", "color": "#6c7086", "marginTop": "2px"}),
+            ]),
+            html.Div([
+                html.Div(f"{ads_blocked:,}", style={"fontSize": "24px", "fontWeight": "700", "color": "#a6e3a1"}),
+                html.Div("Ads/Tracking Blocked", style={"fontSize": "11px", "color": "#6c7086", "marginTop": "2px"}),
+            ]),
+        ]
+    ))
     
-    # Blocklist size
-    children.append(html.Div(style={"marginBottom": "12px"}, children=[
-        html.Div([
-            html.Span("Domains on Blocklist: ", style={"fontSize": "12px", "color": "#6c7086"}),
-            html.Strong(f"{domains_blocked:,}", style={"fontSize": "12px", "color": "#cdd6f4"}),
-        ]),
-    ]))
+    # Only show stats if they are available (not placeholder zeros)
+    if queries_today > 0 or ads_blocked > 0:
+        # Block percentage bar
+        children.append(html.Div(
+            style={"marginBottom": "12px"},
+            children=[
+                html.Div(
+                    style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "4px"},
+                    children=[
+                        html.Span("Block Rate", style={"fontSize": "12px", "color": "#6c7086"}),
+                        html.Span(f"{ads_pct:.1f}%", style={"fontSize": "13px", "fontWeight": "600", "color": "#a6e3a1"}),
+                    ]
+                ),
+                html.Div(
+                    style={
+                        "height": "6px",
+                        "background": "#181825",
+                        "borderRadius": "3px",
+                        "overflow": "hidden",
+                    },
+                    children=[
+                        html.Div(
+                            style={
+                                "width": f"{min(ads_pct, 100):.1f}%",
+                                "height": "100%",
+                                "background": "linear-gradient(90deg, #a6e3a1, #89b4fa)",
+                            }
+                        ),
+                    ]
+                ),
+            ]
+        ))
+        
+        # Blocklist size
+        children.append(html.Div(
+            style={"marginBottom": "12px"},
+            children=[
+                html.Div([
+                    html.Span("Domains on Blocklist: ", style={"fontSize": "12px", "color": "#6c7086"}),
+                    html.Strong(f"{domains_blocked:,}", style={"fontSize": "12px", "color": "#cdd6f4"}),
+                ]),
+            ]
+        ))
     
     # Educational note
-    children.append(html.P(explanation, style={
-        "fontSize": "11px",
-        "color": "#6c7086",
-        "fontStyle": "italic",
-        "lineHeight": "1.6",
-        "padding": "8px",
-        "background": "#181825",
-        "borderRadius": "6px",
-        "borderLeft": "3px solid #89b4fa",
-    }))
+    children.append(html.P(
+        explanation,
+        style={
+            "fontSize": "11px",
+            "color": "#6c7086",
+            "fontStyle": "italic",
+            "lineHeight": "1.6",
+            "padding": "8px",
+            "background": "#181825",
+            "borderRadius": "6px",
+            "borderLeft": "3px solid #89b4fa",
+        }
+    ))
     
-    # Device alert check (example: printer being blocked)
-    blocked = get_pihole_blocked_clients()
-    device_warnings = []
-    
-    # Check for known devices in blocked list (simple heuristic)
-    for domain in blocked[:5]:  # Check last 5 blocks
-        if any(keyword in str(domain).lower() for keyword in ["bambu", "printer", "iot", "smart"]):
-            device_warnings.append(domain)
-    
-    if device_warnings:
-        children.append(html.Div(style={
-            "marginTop": "12px",
-            "padding": "10px",
-            "background": "#f38ba822",
-            "borderRadius": "8px",
-            "borderLeft": "3px solid #f38ba8",
-        }, children=[
-            html.Strong("⚠️ Device Alert", style={"fontSize": "12px", "color": "#f38ba8"}),
-            html.Br(),
-            html.Span(f"Detected potentially blocked device traffic: {device_warnings[0]}", 
-                     style={"fontSize": "11px", "color": "#cdd6f4"}),
-            html.Br(),
-            html.Span("If your printer/IoT stops working, check Pi-hole whitelist.", 
-                     style={"fontSize": "10px", "color": "#6c7086", "fontStyle": "italic"}),
-        ]))
+    # ===== PRINTER/DEVICE DETECTION (pending API) =====
+    # Once Pi-hole API v6 is integrated, printer alerts will appear here
+    if stats.get("api_note"):
+        children.append(html.Div(
+            style={
+                "marginTop": "12px",
+                "padding": "10px",
+                "background": "#fab38722",
+                "borderRadius": "8px",
+                "borderLeft": "3px solid #fab387",
+            },
+            children=[
+                html.Strong(
+                    "🔍 Printer/Device Detection Pending",
+                    style={"fontSize": "12px", "color": "#fab387"}
+                ),
+                html.Br(),
+                html.Span(
+                    "Once full API integration is complete, blocked printer domains will be highlighted here.",
+                    style={"fontSize": "11px", "color": "#cdd6f4", "display": "block", "marginTop": "4px"}
+                ),
+            ]
+        ))
     
     # Admin link
-    children.append(html.Div(style={"marginTop": "12px"}, children=[
-        html.A("Open Pi-hole Admin →", 
-               href=f"{PIHOLE_URL}/admin", 
-               target="_blank",
-               style={
-                   "fontSize": "12px",
-                   "color": "#89b4fa",
-                   "textDecoration": "none",
-                   "display": "inline-block",
-                   "padding": "6px 0",
-               }),
-    ]))
+    children.append(html.Div(
+        style={"marginTop": "12px"},
+        children=[
+            html.A(
+                "Open Pi-hole Admin Dashboard →",
+                href=f"{PIHOLE_URL}/admin",
+                target="_blank",
+                style={
+                    "fontSize": "12px",
+                    "color": "#89b4fa",
+                    "textDecoration": "none",
+                    "display": "inline-block",
+                    "padding": "6px 0",
+                }
+            ),
+        ]
+    ))
     
     return children
 
