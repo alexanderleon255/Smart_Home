@@ -517,16 +517,16 @@ WAVE 2 (Executed 2026-03-02):
 
 ## Known Bugs (from 2026-03-04 assessment)
 
-These bugs were identified during the full codebase assessment. They should be fixed before new feature work.
+These bugs were identified during the full codebase assessment.
 
 ### Tier 1: Fix Now — Security & Correctness
 
-| # | Severity | File | Issue | Fix |
-|---|----------|------|-------|-----|
-| 1 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder text | Wire whisper.cpp (see `jarvis_audio/stt.py`) |
-| 2 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist | Change to `search()` matching VectorMemory signature |
-| 3 | **MEDIUM** | `memory/vector_store.py` | ID collisions: `hash(text) % 10000` (line 84), `% 100000` (lines 114, 146) | Replace with `str(uuid.uuid4())` |
-| 4 | **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered but return "not implemented" | Remove from REGISTERED_TOOLS or implement |
+| # | Severity | File | Issue | Status | Fix |
+|---|----------|------|-------|--------|-----|
+| 1 | **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder text | ✅ FIXED (2026-03-06) | Wire whisper.cpp (now implemented) |
+| 2 | **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist | ✅ FIXED (2026-03-06) | Change to `search()` matching VectorMemory signature |
+| 3 | **MEDIUM** | `memory/vector_store.py` | ID collisions: `hash(text) % 10000` (line 84), `% 100000` (lines 114, 146) | ✅ FIXED (2026-03-06) | Replace with `str(uuid.uuid4())` |
+| 4 | **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered but return "not implemented" | ⬜ NOT STARTED | Remove from REGISTERED_TOOLS or implement |
 
 ### Tier 2: Harden — Reliability & Operations
 
