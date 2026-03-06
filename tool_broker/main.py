@@ -8,10 +8,11 @@ This service bridges Ollama LLM to Home Assistant:
 4. Executes validated actions on Home Assistant
 
 API Endpoints:
-- GET  /v1/health  - Health check (Ollama + HA connectivity)
-- GET  /v1/tools   - List available tools
-- POST /v1/process - Process natural language input
-- POST /v1/execute - Execute a validated tool call
+- GET  /v1/health        - Health check (Ollama + HA connectivity)
+- GET  /v1/tools         - List available tools
+- POST /v1/process       - Process natural language input
+- POST /v1/process/stream - Process with SSE streaming (low latency)
+- POST /v1/execute       - Execute a validated tool call
 """
 
 import json
@@ -24,7 +25,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load .env file from project root
@@ -435,6 +436,124 @@ async def process(
             error_message="Internal server error",
             retryable=False,
         )
+
+
+@app.post("/v1/process/stream")
+async def process_stream(
+    request: ProcessRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key")
+):
+    """
+    Process natural language input with Server-Sent Events (SSE) streaming.
+    
+    This endpoint provides real-time streaming of LLM responses, reducing
+    perceived latency to <500ms for first token.
+    
+    Returns text/event-stream with chunks as they arrive from the LLM.
+    Final event contains the complete JSON response.
+    
+    Args:
+        request: ProcessRequest with text field
+        
+    Returns:
+        StreamingResponse with text/event-stream content-type
+    """
+    _authorize_request(x_api_key)
+    logger.info(f"Streaming: {request.text[:100]}...")
+    
+    async def generate_events():
+        """Generate SSE events from LLM stream."""
+        accumulated_text = ""
+        try:
+            async for chunk in llm_client.process_stream(request.text, request.context):
+                accumulated_text += chunk
+                # Send chunk as SSE event
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+            
+            # Parse accumulated text as ConversationalResponse
+            try:
+                conv = llm_client._parse_response(accumulated_text)
+                
+                # Validate tool calls (same as non-streaming endpoint)
+                validated_calls = []
+                validation_errors = []
+                needs_confirmation = False
+                
+                for tc in conv.tool_calls:
+                    call_dict = {
+                        "type": "tool_call",
+                        "tool_name": tc.tool_name,
+                        "arguments": tc.arguments,
+                        "confidence": tc.confidence,
+                    }
+                    
+                    # Schema validation
+                    is_valid, error_msg = ToolCallValidator.validate_schema(call_dict)
+                    if not is_valid:
+                        validation_errors.append(f"{tc.tool_name}: {error_msg}")
+                        continue
+                    
+                    # Entity validation
+                    is_valid, error_msg = await entity_validator.validate_tool_call(call_dict)
+                    if not is_valid:
+                        validation_errors.append(f"{tc.tool_name}: {error_msg}")
+                        continue
+                    
+                    # Check high-risk override
+                    if is_high_risk_action(tc.tool_name, tc.arguments):
+                        tc = EmbeddedToolCall(
+                            tool_name=tc.tool_name,
+                            arguments=tc.arguments,
+                            confidence=tc.confidence,
+                            requires_confirmation=True,
+                        )
+                    
+                    if tc.requires_confirmation:
+                        needs_confirmation = True
+                    
+                    validated_calls.append(tc)
+                
+               # Append validation errors if any
+                text = conv.text
+                if validation_errors:
+                    text += f" (Note: some actions couldn't be validated: {'; '.join(validation_errors)})"
+                
+                # Send final complete response
+                final_response = {
+                    "type": "complete",
+                    "text": text,
+                    "tool_calls": [tc.model_dump() for tc in validated_calls],
+                    "requires_confirmation": needs_confirmation,
+                }
+                yield f"data: {json.dumps(final_response)}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Parsing error: {e}")
+                error_response = {
+                    "type": "error",
+                    "error_code": "PARSE_ERROR",
+                    "error_message": f"Failed to parse LLM response: {str(e)}",
+                }
+                yield f"data: {json.dumps(error_response)}\n\n"
+        
+        except Exception as e:
+            logger.exception(f"Streaming error: {e}")
+            error_response = {
+                "type": "error",
+                "error_code": "STREAM_ERROR",
+                "error_message": str(e),
+            }
+            yield f"data: {json.dumps(error_response)}\n\n"
+    
+    return StreamingResponse(
+        generate_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
 
 
 @app.post("/v1/execute", response_model=NormalizedResponse)

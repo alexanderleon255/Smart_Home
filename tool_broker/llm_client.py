@@ -340,6 +340,84 @@ class LLMClient:
         return None
     
     # ------------------------------------------------------------------
+    # Streaming support
+    # ------------------------------------------------------------------
+    
+    async def process_stream(self, text: str, context: Optional[Dict[str, Any]] = None):
+        """
+        Stream natural language processing response with tiered LLM routing.
+        
+        Yields chunks as they arrive from the LLM. The accumulated response should
+        be parsed as JSON when complete.
+        
+        Args:
+            text: User input
+            context: Optional conversation history
+            
+        Yields:
+            str: Chunks of text as they stream from the LLM
+        """
+        url, model, tier_name = self._choose_tier(text)
+        logger.info(f"Streaming via {tier_name} tier ({url}/{model})")
+        
+        try:
+            async for chunk in self._call_ollama_stream(url, model, text, context):
+                yield chunk
+        except Exception as e:
+            logger.warning(f"Streaming from {tier_name} failed: {e}, trying fallback")
+            fallback = self._fallback_tier(tier_name)
+            if fallback:
+                fallback_url, fallback_model, fallback_tier = fallback
+                logger.info(f"Falling back to {fallback_tier} tier")
+                async for chunk in self._call_ollama_stream(fallback_url, fallback_model, text, context):
+                    yield chunk
+            else:
+                raise ValueError(f"LLM streaming failed and no fallback available: {e}")
+    
+    async def _call_ollama_stream(self, url: str, model: str, text: str, context: Optional[Dict[str, Any]]):
+        """Call Ollama API withstreaming enabled."""
+        tool_list = get_tool_list_for_prompt()
+        system_prompt = SYSTEM_PROMPT.format(tool_list=tool_list)
+        
+        messages = []
+        if context and "history" in context:
+            messages.extend(context["history"])
+        messages.append({"role": "user", "content": text})
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                *messages,
+            ],
+            "stream": True,  # Enable streaming
+            "options": {
+                "temperature": self.temperature,
+                "num_ctx": 4096,
+            },
+            "format": "json",
+        }
+        
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                "POST",
+                f"{url}/api/chat",
+                json=payload,
+                timeout=60.0
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if line.strip():
+                        try:
+                            chunk_data = json.loads(line)
+                            if "message" in chunk_data:
+                                content = chunk_data["message"].get("content", "")
+                                if content:
+                                    yield content
+                        except json.JSONDecodeError:
+                            continue
+    
+    # ------------------------------------------------------------------
     # Process (main entry point)
     # ------------------------------------------------------------------
 
