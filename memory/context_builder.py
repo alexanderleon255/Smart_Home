@@ -170,9 +170,9 @@ class ContextBuilder:
             return ""
 
         try:
-            # VectorMemory.search returns list of dicts
+            # VectorMemory.search() returns list of dicts with document/metadata
             results = self.vector_store.search(
-                query, n_results=n_results
+                query=query, n_results=n_results, collection="conversations"
             )
         except Exception:
             return ""

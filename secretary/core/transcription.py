@@ -45,7 +45,7 @@ class TranscriptionEngine:
     
     async def start_streaming(self, audio_source: str) -> AsyncGenerator[TranscriptionChunk, None]:
         """
-        Start streaming transcription from audio source via whisper.cpp.
+        Start streaming transcription from audio source using whisper.cpp.
         
         Args:
             audio_source: Path to audio file or stream URL
@@ -61,49 +61,54 @@ class TranscriptionEngine:
         
         logger.info(f"Starting transcription stream from {audio_source}")
         
-        # Get whisper.cpp paths from environment
-        whisper_cpp_path = Path(os.getenv("WHISPER_CPP_BIN", "./whisper.cpp/build/bin/whisper-cli"))
-        whisper_model = os.getenv("WHISPER_MODEL", "base.en")
-        
-        if not whisper_cpp_path.exists():
-            logger.error(f"whisper.cpp not found at {whisper_cpp_path}")
-            self.is_running = False
-            return
-        
         try:
-            # Run whisper.cpp on audio source with streaming output
+            # Build whisper.cpp command
+            whisper_bin = Path(secretary_config.whisper_model_path).parent / "whisper-cli"
+            if not whisper_bin.exists():
+                # Fallback to system PATH
+                whisper_bin = "whisper-cli"
+            
             cmd = [
-                str(whisper_cpp_path),
-                "-m", whisper_model,
-                "-f", audio_source,
-                "--no-timestamps",
-                "-otxt",  # Output as text
+                str(whisper_bin),
+                "-m", secretary_config.whisper_model,
+                "-l", "en",
+                "-otxt",
+                str(audio_source)
             ]
             
+            # Run whisper.cpp process
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
             
-            # Read output line by line
-            while self.is_running:
-                line = await process.stdout.readline()
-                if not line:
-                    break
-                
-                text = line.decode('utf-8').strip()
-                if text:
-                    chunk = TranscriptionChunk(
-                        timestamp=datetime.utcnow(),
-                        text=text,
-                        confidence=0.9  # whisper.cpp doesn't provide per-word confidence
-                    )
-                    self._write_chunk(chunk)
-                    yield chunk
+            stdout, stderr = await process.communicate()
             
-            # Wait for process to complete
-            await process.wait()
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                logger.error(f"whisper.cpp failed: {error_msg}")
+                raise RuntimeError(f"Transcription failed: {error_msg}")
+            
+            # Parse output (whisper.cpp writes to .txt file)
+            output_file = Path(str(audio_source) + ".txt")
+            if output_file.exists():
+                text = output_file.read_text().strip()
+                output_file.unlink()  # Clean up temp file
+            else:
+                # Try parsing stdout
+                text = stdout.decode().strip()
+            
+            if text:
+                chunk = TranscriptionChunk(
+                    timestamp=datetime.utcnow(),
+                    text=text,
+                    confidence=0.95  # whisper.cpp doesn't provide per-word confidence
+                )
+                self._write_chunk(chunk)
+                yield chunk
+            else:
+                logger.warning(f"whisper.cpp produced no output for {audio_source}")
                 
         except Exception as e:
             logger.error(f"Transcription stream error: {e}")
