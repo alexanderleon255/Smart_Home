@@ -42,7 +42,7 @@ services:
       - "8080:80/tcp"     # Pi-hole web interface on 8080 (avoid conflict with other services)
     environment:
       TZ: 'America/New_York'
-      WEBPASSWORD: ''      # Empty = random password generated, shown in logs
+      WEBPASSWORD: 'pihole_admin_2026'  # Dashboard-accessible admin password (rotate in production)
       FTLCONF_LOCAL_IPV4: '192.168.0.189'  # Pi's LAN IP
       PIHOLE_DNS_: '1.1.1.1;1.0.0.1'      # Cloudflare upstream DNS
       DNSMASQ_LISTENING: 'all'            # Listen on all interfaces (LAN + Tailscale)
