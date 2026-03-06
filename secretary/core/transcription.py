@@ -45,7 +45,7 @@ class TranscriptionEngine:
     
     async def start_streaming(self, audio_source: str) -> AsyncGenerator[TranscriptionChunk, None]:
         """
-        Start streaming transcription from audio source.
+        Start streaming transcription from audio source via whisper.cpp.
         
         Args:
             audio_source: Path to audio file or stream URL
@@ -53,33 +53,57 @@ class TranscriptionEngine:
         Yields:
             TranscriptionChunk objects with timestamp and text
         """
+        import os
+        from pathlib import Path
+        
         self.is_running = True
         self.transcript_file.write_text("")  # Clear file
         
         logger.info(f"Starting transcription stream from {audio_source}")
         
-        # NOTE: This is a placeholder implementation
-        # Real implementation would integrate with whisper.cpp streaming mode
-        # For now, simulate streaming behavior
+        # Get whisper.cpp paths from environment
+        whisper_cpp_path = Path(os.getenv("WHISPER_CPP_BIN", "./whisper.cpp/build/bin/whisper-cli"))
+        whisper_model = os.getenv("WHISPER_MODEL", "base.en")
+        
+        if not whisper_cpp_path.exists():
+            logger.error(f"whisper.cpp not found at {whisper_cpp_path}")
+            self.is_running = False
+            return
         
         try:
+            # Run whisper.cpp on audio source with streaming output
+            cmd = [
+                str(whisper_cpp_path),
+                "-m", whisper_model,
+                "-f", audio_source,
+                "--no-timestamps",
+                "-otxt",  # Output as text
+            ]
+            
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            
+            # Read output line by line
             while self.is_running:
-                # Placeholder: would run whisper.cpp on audio chunk here
-                # Example command would be:
-                # whisper.cpp --model {self.model} --stream --step {self.chunk_seconds}s {audio_source}
+                line = await process.stdout.readline()
+                if not line:
+                    break
                 
-                # Simulate getting transcription chunk
-                await asyncio.sleep(self.chunk_seconds)
-                
-                # In real implementation, parse whisper.cpp output here
-                chunk = TranscriptionChunk(
-                    timestamp=datetime.utcnow(),
-                    text="[Placeholder transcription chunk]",
-                    confidence=0.85
-                )
-                
-                self._write_chunk(chunk)
-                yield chunk
+                text = line.decode('utf-8').strip()
+                if text:
+                    chunk = TranscriptionChunk(
+                        timestamp=datetime.utcnow(),
+                        text=text,
+                        confidence=0.9  # whisper.cpp doesn't provide per-word confidence
+                    )
+                    self._write_chunk(chunk)
+                    yield chunk
+            
+            # Wait for process to complete
+            await process.wait()
                 
         except Exception as e:
             logger.error(f"Transcription stream error: {e}")

@@ -75,13 +75,15 @@ class VectorMemory:
             metadata: Additional context (speaker, timestamp, etc.)
             session_id: Session identifier
         """
+        import uuid
+        
         if session_id is None:
             session_id = datetime.now().strftime("session_%Y%m%d_%H%M%S")
             
         embedding = self.embedder.encode(text).tolist()
         
         self.conversations.add(
-            ids=[f"{session_id}_{hash(text) % 10000}"],
+            ids=[f"{session_id}_{str(uuid.uuid4())}"],
             embeddings=[embedding],
             documents=[text],
             metadatas=[{
@@ -107,11 +109,13 @@ class VectorMemory:
             context: Surrounding context
             source_session: Source session ID
         """
+        import uuid
+        
         text = f"{entity_type}: {entity_value}. Context: {context}"
         embedding = self.embedder.encode(text).tolist()
         
         self.entities.add(
-            ids=[f"entity_{hash(text) % 100000}"],
+            ids=[f"entity_{str(uuid.uuid4())}"],
             embeddings=[embedding],
             documents=[text],
             metadatas=[{
@@ -139,11 +143,13 @@ class VectorMemory:
             rationale: Why it was created
             config: Configuration details
         """
+        import uuid
+        
         text = f"{name}: {description}. Rationale: {rationale}"
         embedding = self.embedder.encode(text).tolist()
         
         self.automations.add(
-            ids=[f"automation_{hash(text) % 100000}"],
+            ids=[f"automation_{str(uuid.uuid4())}"],
             embeddings=[embedding],
             documents=[text],
             metadatas=[{

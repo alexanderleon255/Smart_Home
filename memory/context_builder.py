@@ -170,8 +170,8 @@ class ContextBuilder:
             return ""
 
         try:
-            # VectorMemory.search_conversations returns list of dicts
-            results = self.vector_store.search_conversations(
+            # VectorMemory.search returns list of dicts
+            results = self.vector_store.search(
                 query, n_results=n_results
             )
         except Exception:

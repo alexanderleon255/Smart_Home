@@ -50,11 +50,17 @@ export LLM_TEMPERATURE="0.3"
 export PORT="8000"
 ```
 
-**Secure Token Storage (macOS):**
+**Secure Token Storage:**
 
 ```bash
-# Store in Keychain (recommended)
+# Store in OS Keyring (Keychain on macOS, Secret Service on Linux)
 python -c "import keyring; keyring.set_password('home_assistant', 'api_token', 'your_token')"
+```
+
+If the above fails, set the environment variable directly:
+
+```bash
+export HA_TOKEN="your_long_lived_access_token"
 ```
 
 ### Run the Server
@@ -66,6 +72,31 @@ uvicorn tool_broker.main:app --reload --port 8000
 # Or via module
 python -m tool_broker.main
 ```
+
+## Troubleshooting
+
+### VS Code Keyring Error on Raspberry Pi
+
+**Symptom:** "An OS keyring couldn't be identified for storing the encryption related data in your current desktop environment"
+
+**Cause:** VS Code's credential storage requires `XDG_CURRENT_DESKTOP` to be set to a known desktop environment (e.g., `GNOME`). RPi's default `labwc:wlroots` is not recognized.
+
+**Fix (System-wide):**
+
+The system VS Code desktop entry has been updated to set `XDG_CURRENT_DESKTOP=GNOME`. If you still see the error:
+1. Log out and back in (desktop session cache refresh).
+2. Verify the fix: `grep XDG_CURRENT_DESKTOP /usr/share/applications/code.desktop`
+
+### Tool Broker Keyring Fallback
+
+The Tool Broker has a robust keyring fallback:
+1. **Primary:** Environment variable `HA_TOKEN` (safest)
+2. **Secondary:** OS Secret Service (SecretService on Linux, Keychain on macOS)
+3. **Fallback:** File-based keyring (unencrypted, only if above fail)
+
+If you see "Falling back to file-based keyring" in logs:
+- **Recommended:** Set `HA_TOKEN` env var instead
+- **Or fix:** Restart your systemd user session to ensure `DBUS_SESSION_BUS_ADDRESS` is set
 
 ## API Endpoints
 

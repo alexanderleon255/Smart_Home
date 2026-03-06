@@ -12,7 +12,11 @@ from typing import Optional, List
 
 def _parse_cors_origins() -> List[str]:
     """Parse comma-separated CORS origins from environment."""
-    raw = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1")
+    # DEC-007: Include HA dashboard ports and homeassistant.local
+    raw = os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:8123,http://homeassistant.local:8123,http://localhost,http://127.0.0.1"
+    )
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
@@ -62,24 +66,51 @@ def _get_ha_token() -> Optional[str]:
     
     Priority:
     1. Environment variable (HA_TOKEN)
-    2. macOS Keychain (via keyring)
-    3. None (will fail at runtime if HA integration needed)
+    2. OS Secret Service (SecretService / Keychain) via keyring
+    3. File-based fallback (keyring.backends.file.PlaintextKeyring) — logs warning
+    4. None (will fail at runtime if HA integration needed)
     """
-    # Try environment variable first
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Try environment variable first (highest priority)
     token = os.getenv("HA_TOKEN")
     if token:
         return token
     
-    # Try macOS Keychain
+    # Try OS Secret Service (SecretService on Linux, Keychain on macOS)
     try:
         import keyring
+        # Query current backend to log which one is being used
+        backend = keyring.get_keyring()
+        logger.debug(f"Keyring backend: {type(backend).__module__}.{type(backend).__name__}")
+        
+        token = keyring.get_password("home_assistant", "api_token")
+        if token:
+            logger.info("HA token retrieved from OS keyring")
+            return token
+    except ImportError:
+        logger.debug("keyring package not installed, skipping OS keyring lookup")
+    except Exception as e:
+        logger.debug(f"OS keyring lookup failed ({type(e).__name__}: {e}), will try fallback")
+    
+    # Fallback: use file-based keyring (PlaintextKeyring from keyring.backends.file)
+    try:
+        import keyring
+        from keyring.backends.file import PlaintextKeyring
+        
+        logger.warning(
+            "OS keyring unavailable or SecretService not responding. "
+            "Falling back to file-based keyring (unencrypted storage). "
+            "Recommend: (1) Set HA_TOKEN env var, or (2) Fix system keyring setup "
+            "(see README Troubleshooting)."
+        )
+        keyring.set_keyring(PlaintextKeyring())
         token = keyring.get_password("home_assistant", "api_token")
         if token:
             return token
-    except ImportError:
-        pass
-    except Exception:
-        pass
+    except Exception as fallback_error:
+        logger.debug(f"File-based keyring fallback also failed: {fallback_error}")
     
     return None
 

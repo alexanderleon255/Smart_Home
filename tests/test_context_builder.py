@@ -177,7 +177,7 @@ class TestDossierSection:
 
     def test_with_mock_vector_store(self, state_store, event_store):
         class FakeVS:
-            def search_conversations(self, q, n_results=5):
+            def search(self, q, n_results=5):
                 return [{"document": f"Found: {q}"}]
 
         cb = ContextBuilder(
