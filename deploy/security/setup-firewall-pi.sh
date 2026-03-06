@@ -134,6 +134,18 @@ configure_dashboard() {
 }
 
 # =============================================================================
+# 6b. Pi-hole — LAN + Tailscale (web interface 8080, DNS 53)
+# =============================================================================
+configure_pihole() {
+    log "Configuring Pi-hole (web 8080, DNS 53)"
+    for net in "${ALLOWED_NETS[@]}"; do
+        ufw allow from "$net" to any port 8080 proto tcp comment "Pi-hole web from $net"
+        ufw allow from "$net" to any port 53 proto tcp comment "Pi-hole DNS/TCP from $net"
+        ufw allow from "$net" to any port 53 proto udp comment "Pi-hole DNS/UDP from $net"
+    done
+}
+
+# =============================================================================
 # 7. Ollama — LAN + Tailscale (needed for sidecar routing from Mac)
 # =============================================================================
 configure_ollama() {
@@ -248,6 +260,7 @@ main() {
     configure_ha
     configure_tool_broker
     configure_dashboard
+    configure_pihole
     configure_ollama
     configure_mqtt
     configure_sonobus

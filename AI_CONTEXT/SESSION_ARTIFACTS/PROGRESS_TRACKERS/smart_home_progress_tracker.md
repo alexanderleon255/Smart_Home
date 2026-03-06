@@ -87,18 +87,18 @@
 
 ---
 
-## Phase 4: Security Hardening (2/6 = 33%)
+## Phase 4: Security Hardening (4/6 = 67%)
 
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
 | P4-01 | Tailscale Installation & Configuration | ✅ COMPLETE | 2026-03-03 | Pi=100.83.1.2, Mac=100.98.1.21, iPhone=100.83.74.23 |
 | P4-02 | Tailscale ACLs | ✅ COMPLETE | 2026-03-05 | ACL policy file with 5 tiers, built-in tests, ready for admin console |
-| P4-03 | Local Firewall Configuration | ✅ COMPLETE | 2026-03-05 | UFW (Pi) + pf (Mac) scripts, Docker compat, verification script |
+| P4-03 | Local Firewall Configuration | ✅ COMPLETE | 2026-03-05 | UFW (Pi) + pf (Mac) scripts, Docker compat, verification script; Pi-hole ports (53, 8080) added 2026-03-06 |
 | P4-04 | Credential Rotation & Storage | ✅ COMPLETE | 2026-03-02 | API-key auth, CORS allowlist, rate limiting, PolicyGate |
-| P4-05 | Logging & Monitoring Setup | ⬜ NOT STARTED | - | |
+| P4-05 | Logging & Monitoring Setup | ⬜ NOT STARTED | - | **PARTIAL:** Dashboard now shows educational status explanations, Pi-hole DNS stats, device block alerts |
 | P4-06 | Security Audit | ⬜ NOT STARTED | - | |
 
-**Phase 4 Status:** 🟡 67% -- Tailscale mesh fully operational (Pi, Mac, iPhone, iPad). Software-level security (auth, PolicyGate, CORS) complete. ACL policy created with 5 device tiers (admin/mobile/server/sidecar/guest) and built-in Tailscale test assertions. Pi UFW + Mac pf firewall scripts created with Docker compatibility. Verification script for security posture checks. Manual steps remaining: paste ACLs into admin console, assign device tags, run firewall scripts on Pi and Mac.
+**Phase 4 Status:** 🟡 67% -- Tailscale mesh fully operational (Pi, Mac, iPhone, iPad). Software-level security (auth, PolicyGate, CORS) complete. ACL policy created with 5 device tiers (admin/mobile/server/sidecar/guest) and built-in Tailscale test assertions. Pi UFW + Mac pf firewall scripts created with Docker compatibility. Verification script for security posture checks. **NEW (2026-03-06):** Pi-hole deployed via Docker for network-wide DNS filtering (blocks ads/trackers); Dashboard enhanced with verbose educational status messages, Pi-hole monitoring panel, and device block alerts. Dedicated SSH key created for passwordless Pi access. Manual steps remaining: paste ACLs into admin console, assign device tags, run firewall scripts on Pi and Mac.
 
 ---
 
@@ -225,6 +225,7 @@
 | 2026-03-05 | Diagnostic pattern | P2-07 | HADiagnostic + TierDiagnostic pattern across HA client, dashboard, Jarvis client, audio pipeline; 248 tests passing |
 | 2026-03-05 | Dashboard chat visibility | P2-08 | Audit middleware captures response body; dashboard polls audit + injects ALL external interactions into chat; source badges; 248 tests |
 | 2026-03-05 | Security hardening | P4-02, P4-03 | Tailscale ACL policy (5 tiers, 10+ test assertions); Pi UFW script (7 port rules, Docker compat, SSH rate limit); Mac pf script (Ollama-only); verification script; security README; bootstrap.sh updated; 248 tests passing |
+| 2026-03-06 | Pi-hole + Dashboard UX | P4-03 (firewall), P4-05 (partial) | Pi-hole deployed via Docker Compose (web 8080, DNS 53); Dashboard enhanced with educational status messages, Pi-hole monitoring panel (queries/blocks/alerts), device block warnings (printer/IoT detection); Firewall updated to allow Pi-hole ports; SSH key pair created (id_smarthome_pi) for passwordless Pi access; ssh-config-snippet + security README updated; Admin password: lFaYy2wS |
 
 ---
 

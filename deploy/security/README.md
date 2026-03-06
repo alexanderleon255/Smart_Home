@@ -29,9 +29,11 @@ Three layers of network security:
 | Port | Protocol | Service | Access |
 |------|----------|---------|--------|
 | 22 | TCP | SSH | Admin only (rate-limited) |
+| 53 | TCP/UDP | Pi-hole DNS | LAN + Tailscale |
 | 1883 | TCP | MQTT (Mosquitto) | Localhost + Docker + Tailscale |
 | 8000 | TCP | Tool Broker (FastAPI) | LAN + Tailscale |
 | 8050 | TCP | Dashboard (Dash) | LAN + Tailscale |
+| 8080 | TCP | Pi-hole Web Admin | LAN + Tailscale |
 | 8123 | TCP | Home Assistant | LAN + Tailscale |
 | 10998 | UDP | SonoBus (audio bridge) | LAN + Tailscale |
 | 11434 | TCP | Ollama (local LLM) | LAN + Tailscale |
@@ -110,6 +112,60 @@ sudo ./deploy/security/setup-firewall-mac.sh
 | **Pi → Mac** | ❌ | — | — | — | — | — | ✅ |
 | **Users (partner)** | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | **Guest** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+---
+
+## Pi-hole DNS Filtering
+
+Pi-hole is deployed via Docker Compose on the Pi and provides network-wide ad/tracker blocking at the DNS level.
+
+### Access
+
+- **Web Admin:** http://100.83.1.2:8080/admin (Tailscale) or http://192.168.0.189:8080/admin (LAN)
+- **Admin Password:** `lFaYy2wS` (stored in Docker logs: `docker logs pihole | grep password`)
+
+### How It Works
+
+1. Devices send DNS queries (e.g., "what's the IP for ads.google.com?")
+2. Pi-hole checks the domain against blocklists (~1.3M domains by default)
+3. If blocked, Pi-hole returns nothing (0.0.0.0) → ad/tracker can't load
+4. If allowed, forwards to upstream DNS (Cloudflare 1.1.1.1)
+
+### Monitoring
+
+The Dashboard includes a live Pi-hole status panel showing:
+- Queries processed today
+- Ads/trackers blocked today  
+- Block rate percentage
+- **Device alerts:** If known devices (printer, IoT) get blocked
+
+### Configuration
+
+To use Pi-hole network-wide:
+1. Set device DNS to `192.168.0.189` (Pi's IP), OR
+2. Configure router DHCP to advertise Pi as primary DNS
+
+**Caution:** Some IoT devices may break if they can't reach telemetry domains. Use Pi-hole's whitelist feature if needed.
+
+---
+
+## SSH Configuration (Passwordless Pi Access)
+
+A dedicated SSH key (`~/.ssh/id_smarthome_pi`) has been created for Pi access. Add this to your `~/.ssh/config`:
+
+```bash
+Host pi smarthome squishy-home
+    HostName 100.83.1.2
+    User alexanderleon255
+    IdentityFile ~/.ssh/id_smarthome_pi
+    IdentitiesOnly yes
+```
+
+Usage: `ssh pi` (no password needed)
+
+See `ssh-config-snippet.txt` for the full snippet.
+
+---
 
 ## Rollback
 

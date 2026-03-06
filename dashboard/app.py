@@ -42,6 +42,7 @@ BROKER_URL = os.getenv("TOOL_BROKER_URL", os.getenv("BROKER_URL", "http://localh
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8050"))
+PIHOLE_URL = os.getenv("PIHOLE_URL", "http://localhost:8080")
 
 # ---------------------------------------------------------------------------
 # Shared state
@@ -68,6 +69,39 @@ def _log(kind: str, data: dict):
         "kind": kind,
         **data,
     })
+
+
+# ---------------------------------------------------------------------------
+# Pi-hole API client
+# ---------------------------------------------------------------------------
+
+def get_pihole_stats() -> dict:
+    """Fetch Pi-hole statistics. Returns empty dict on error."""
+    try:
+        resp = httpx.get(f"{PIHOLE_URL}/admin/api.php?summaryRaw", timeout=3.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                "status": data.get("status", "unknown"),
+                "domains_blocked": int(data.get("domains_being_blocked", 0)),
+                "queries_today": int(data.get("dns_queries_today", 0)),
+                "ads_blocked_today": int(data.get("ads_blocked_today", 0)),
+                "ads_percentage_today": float(data.get("ads_percentage_today", 0)),
+            }
+    except Exception:
+        pass
+    return {}
+
+
+def get_pihole_blocked_clients() -> list:
+    """Fetch recently blocked queries (for device alerts). Returns empty list on error."""
+    try:
+        resp = httpx.get(f"{PIHOLE_URL}/admin/api.php?recentBlocked", timeout=3.0)
+        if resp.status_code == 200:
+            return resp.json()  # List of recently blocked domains
+    except Exception:
+        pass
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +304,17 @@ def build_layout():
                     dcc.Interval(id="tailscale-interval", interval=15_000, n_intervals=0),
                 ]),
 
+                # Pi-hole DNS Filtering
+                html.Div(style=CARD, children=[
+                    html.H3("Pi-hole (DNS Filtering)", style={"margin": "0 0 8px 0", "fontSize": "16px"}),
+                    html.P("Blocks ads & trackers network-wide at the DNS level", 
+                           style={"fontSize": "12px", "color": "#6c7086", "marginBottom": "12px", "fontStyle": "italic"}),
+                    html.Div(id="pihole-panel", children=[
+                        html.P("Checking…", style={"color": "#6c7086"}),
+                    ]),
+                    dcc.Interval(id="pihole-interval", interval=10_000, n_intervals=0),
+                ]),
+
                 # Voice / Secretary
                 html.Div(style=CARD, children=[
                     html.H3("Voice / Secretary", style={"margin": "0 0 12px 0", "fontSize": "16px"}),
@@ -352,24 +397,100 @@ app.layout = build_layout
     prevent_initial_call=False,
 )
 def update_status(n, _clicks):
-    """Poll health endpoints and render status."""
+    """Poll health endpoints and render status with educational explanations."""
     manager.check_all()
 
-    def _row(svc):
+    def _row(svc, explanation=""):
         sub_text = svc.model or svc.detail or ""
+        status_color_map = {
+            ServiceStatus.RUNNING: "#22c55e",
+            ServiceStatus.STARTING: "#eab308",
+            ServiceStatus.STOPPED: "#6b7280",
+            ServiceStatus.ERROR: "#ef4444",
+        }
+        status_color = status_color_map.get(svc.status, "#6b7280")
+        
         return html.Div(
-            style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "10px"},
+            style={"marginBottom": "16px"},
             children=[
-                html.Div([
-                    html.Strong(svc.name, style={"fontSize": "14px"}),
-                    html.Br(),
-                    html.Span(sub_text, style={"fontSize": "12px", "color": "#6c7086"}),
-                ]),
-                _status_badge(svc.status),
+                html.Div(
+                    style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "6px"},
+                    children=[
+                        html.Div([
+                            html.Strong(svc.name, style={"fontSize": "14px"}),
+                            html.Br(),
+                            html.Span(sub_text, style={"fontSize": "12px", "color": "#6c7086"}),
+                        ]),
+                        _status_badge(svc.status),
+                    ],
+                ),
+                # Educational explanation
+                html.Div(style={
+                    "fontSize": "11px",
+                    "color": "#89aec8",
+                    "fontStyle": "italic",
+                    "lineHeight": "1.5",
+                    "padding": "8px",
+                    "background": "#181825",
+                    "borderRadius": "6px",
+                    "borderLeft": f"3px solid {status_color}",
+                }, children=[
+                    html.Span("💡 ", style={"marginRight": "4px"}),
+                    explanation
+                ]) if explanation else None,
             ],
         )
 
-    return [_row(manager.ollama), _row(manager.broker)]
+    ollama_explanation = "Ollama runs the LLM (Large Language Model) that powers Jarvis. It receives natural language and returns structured tool calls."
+    broker_explanation = "Tool Broker validates and executes tool calls from Ollama, talking to Home Assistant, cameras, and other integrations. It's the security gate."
+    
+    children = [
+        _row(manager.ollama, ollama_explanation),
+        _row(manager.broker, broker_explanation),
+    ]
+    
+    # Add system-wide note if both are working
+    if manager.ollama.status == ServiceStatus.RUNNING and manager.broker.status == ServiceStatus.RUNNING:
+        children.append(html.Div(style={
+            "marginTop": "12px",
+            "padding": "10px",
+            "background": "#22c55e22",
+            "borderRadius": "8px",
+            "borderLeft": "3px solid #22c55e",
+        }, children=[
+            html.Strong("✓ System Ready", style={"fontSize": "12px", "color": "#22c55e"}),
+            html.Br(),
+            html.Span("Voice commands will be: captured → transcribed (STT) → sent to Ollama → validated by Broker → executed on devices.",
+                     style={"fontSize": "11px", "color": "#cdd6f4", "lineHeight": "1.6"}),
+        ]))
+    elif manager.ollama.status != ServiceStatus.RUNNING and manager.broker.status == ServiceStatus.RUNNING:
+        children.append(html.Div(style={
+            "marginTop": "12px",
+            "padding": "10px",
+            "background": "#eab30822",
+            "borderRadius": "8px",
+            "borderLeft": "3px solid #eab308",
+        }, children=[
+            html.Strong("⚠️ LLM Offline", style={"fontSize": "12px", "color": "#eab308"}),
+            html.Br(),
+            html.Span("Broker is running but can't route requests without Ollama. Voice commands won't work, but HA native automations still function.",
+                     style={"fontSize": "11px", "color": "#cdd6f4"}),
+        ]))
+    elif manager.broker.status != ServiceStatus.RUNNING:
+        children.append(html.Div(style={
+            "marginTop": "12px",
+            "padding": "10px",
+            "background": "#ef444422",
+            "borderRadius": "8px",
+            "borderLeft": "3px solid #ef4444",
+        }, children=[
+            html.Strong("✗ Broker Offline", style={"fontSize": "12px", "color": "#ef4444"}),
+            html.Br(),
+            html.Span("Even if Ollama is running, tool calls can't be executed. Voice assistant is non-functional.",
+                     style={"fontSize": "11px", "color": "#cdd6f4"}),
+        ]))
+    
+    return children
 
 
 @app.callback(
@@ -917,6 +1038,159 @@ def update_tailscale(n, _clicks):
 
     # Summary
     children.append(html.P(ts["detail"], style={"fontSize": "11px", "color": "#6c7086", "marginTop": "8px"}))
+    return children
+
+
+# ---------------------------------------------------------------------------
+# Pi-hole callback
+# ---------------------------------------------------------------------------
+
+@app.callback(
+    Output("pihole-panel", "children"),
+    Input("pihole-interval", "n_intervals"),
+    Input("btn-refresh", "n_clicks"),
+    prevent_initial_call=False,
+)
+def update_pihole(n, _clicks):
+    """Poll Pi-hole stats and render DNS filtering panel."""
+    stats = get_pihole_stats()
+    
+    if not stats:
+        return [
+            html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=[
+                html.Span("●", style={"color": "#f38ba8"}),
+                html.Span("Pi-hole offline or unreachable", style={"fontSize": "13px"}),
+            ]),
+            html.P(f"Expected at {PIHOLE_URL}/admin", style={"fontSize": "12px", "color": "#6c7086", "margin": "8px 0 0 0"}),
+        ]
+    
+    status = stats.get("status", "unknown")
+    status_color = "#22c55e" if status == "enabled" else "#f38ba8"
+    domains_blocked = stats.get("domains_blocked", 0)
+    queries_today = stats.get("queries_today", 0)
+    ads_blocked = stats.get("ads_blocked_today", 0)
+    ads_pct = stats.get("ads_percentage_today", 0)
+    
+    # Educational explanation of what Pi-hole is doing
+    explanation = "Pi-hole intercepts DNS queries (when your devices ask 'what IP is ads.google.com?') and returns nothing for domains on blocklists."
+    
+    children = []
+    
+    # Status header
+    children.append(html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px"}, children=[
+        html.Strong("Status", style={"fontSize": "13px"}),
+        html.Span(status.upper(), style={
+            "fontSize": "11px",
+            "fontWeight": "600",
+            "color": status_color,
+            "background": f"{status_color}22",
+            "padding": "3px 10px",
+            "borderRadius": "10px",
+        }),
+    ]))
+    
+    # Stats grid
+    children.append(html.Div(style={
+        "display": "grid",
+        "gridTemplateColumns": "1fr 1fr",
+        "gap": "12px",
+        "background": "#181825",
+        "borderRadius": "8px",
+        "padding": "12px",
+        "marginBottom": "12px",
+    }, children=[
+        # Queries today
+        html.Div([
+            html.Div(f"{queries_today:,}", style={"fontSize": "24px", "fontWeight": "700", "color": "#89b4fa"}),
+            html.Div("DNS Queries Today", style={"fontSize": "11px", "color": "#6c7086", "marginTop": "2px"}),
+        ]),
+        # Ads blocked
+        html.Div([
+            html.Div(f"{ads_blocked:,}", style={"fontSize": "24px", "fontWeight": "700", "color": "#a6e3a1"}),
+            html.Div("Ads Blocked Today", style={"fontSize": "11px", "color": "#6c7086", "marginTop": "2px"}),
+        ]),
+    ]))
+    
+    # Block percentage
+    children.append(html.Div(style={"marginBottom": "12px"}, children=[
+        html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "4px"}, children=[
+            html.Span("Block Rate", style={"fontSize": "12px", "color": "#6c7086"}),
+            html.Span(f"{ads_pct:.1f}%", style={"fontSize": "13px", "fontWeight": "600", "color": "#a6e3a1"}),
+        ]),
+        html.Div(style={
+            "height": "6px",
+            "background": "#181825",
+            "borderRadius": "3px",
+            "overflow": "hidden",
+        }, children=[
+            html.Div(style={
+                "width": f"{min(ads_pct, 100):.1f}%",
+                "height": "100%",
+                "background": "linear-gradient(90deg, #a6e3a1, #89b4fa)",
+            }),
+        ]),
+    ]))
+    
+    # Blocklist size
+    children.append(html.Div(style={"marginBottom": "12px"}, children=[
+        html.Div([
+            html.Span("Domains on Blocklist: ", style={"fontSize": "12px", "color": "#6c7086"}),
+            html.Strong(f"{domains_blocked:,}", style={"fontSize": "12px", "color": "#cdd6f4"}),
+        ]),
+    ]))
+    
+    # Educational note
+    children.append(html.P(explanation, style={
+        "fontSize": "11px",
+        "color": "#6c7086",
+        "fontStyle": "italic",
+        "lineHeight": "1.6",
+        "padding": "8px",
+        "background": "#181825",
+        "borderRadius": "6px",
+        "borderLeft": "3px solid #89b4fa",
+    }))
+    
+    # Device alert check (example: printer being blocked)
+    blocked = get_pihole_blocked_clients()
+    device_warnings = []
+    
+    # Check for known devices in blocked list (simple heuristic)
+    for domain in blocked[:5]:  # Check last 5 blocks
+        if any(keyword in str(domain).lower() for keyword in ["bambu", "printer", "iot", "smart"]):
+            device_warnings.append(domain)
+    
+    if device_warnings:
+        children.append(html.Div(style={
+            "marginTop": "12px",
+            "padding": "10px",
+            "background": "#f38ba822",
+            "borderRadius": "8px",
+            "borderLeft": "3px solid #f38ba8",
+        }, children=[
+            html.Strong("⚠️ Device Alert", style={"fontSize": "12px", "color": "#f38ba8"}),
+            html.Br(),
+            html.Span(f"Detected potentially blocked device traffic: {device_warnings[0]}", 
+                     style={"fontSize": "11px", "color": "#cdd6f4"}),
+            html.Br(),
+            html.Span("If your printer/IoT stops working, check Pi-hole whitelist.", 
+                     style={"fontSize": "10px", "color": "#6c7086", "fontStyle": "italic"}),
+        ]))
+    
+    # Admin link
+    children.append(html.Div(style={"marginTop": "12px"}, children=[
+        html.A("Open Pi-hole Admin →", 
+               href=f"{PIHOLE_URL}/admin", 
+               target="_blank",
+               style={
+                   "fontSize": "12px",
+                   "color": "#89b4fa",
+                   "textDecoration": "none",
+                   "display": "inline-block",
+                   "padding": "6px 0",
+               }),
+    ]))
+    
     return children
 
 

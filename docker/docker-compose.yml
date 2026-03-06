@@ -32,6 +32,31 @@ services:
       - mosquitto_logs:/mosquitto/log
       - ./mosquitto/config:/mosquitto/config
 
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8080:80/tcp"     # Pi-hole web interface on 8080 (avoid conflict with other services)
+    environment:
+      TZ: 'America/New_York'
+      WEBPASSWORD: ''      # Empty = random password generated, shown in logs
+      FTLCONF_LOCAL_IPV4: '192.168.0.189'  # Pi's LAN IP
+      PIHOLE_DNS_: '1.1.1.1;1.0.0.1'      # Cloudflare upstream DNS
+      DNSMASQ_LISTENING: 'all'            # Listen on all interfaces (LAN + Tailscale)
+    volumes:
+      - pihole_config:/etc/pihole
+      - pihole_dnsmasq:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+    dns:
+      - 127.0.0.1
+      - 1.1.1.1
+
 volumes:
   mosquitto_data:
   mosquitto_logs:
+  pihole_config:
+  pihole_dnsmasq:

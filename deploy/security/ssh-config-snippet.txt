@@ -1,0 +1,19 @@
+# Smart Home — SSH Config Snippet
+# Add this to your ~/.ssh/config for passwordless Pi access
+#
+# Usage: ssh pi           (connects automatically with correct key)
+
+Host pi smarthome squishy-home
+    HostName 100.83.1.2
+    User alexanderleon255
+    IdentityFile ~/.ssh/id_smarthome_pi
+    IdentitiesOnly yes
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+# Alternative: Use LAN IP if Tailscale is down
+Host pi-lan
+    HostName 192.168.0.189
+    User alexanderleon255
+    IdentityFile ~/.ssh/id_smarthome_pi
+    IdentitiesOnly yes
