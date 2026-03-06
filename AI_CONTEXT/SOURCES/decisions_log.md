@@ -93,6 +93,20 @@
 **Rationale:** HAOS is an appliance OS that restricts package installation. Running Ollama, whisper.cpp, Piper TTS, SonoBus, PipeWire, and Tool Broker natively on the Pi requires a full Linux OS. Debian Bookworm provides package management, systemd services, and full control.  
 **Trade-off:** Lose HAOS add-on ecosystem and one-click updates. Gain full Linux control.
 
+### DEC-015: Tool List Redesign — Granular HA Tools
+**Decided:** 2026-03-06  
+**Decision:** Replace the generic tool list (smart_home_control, calculate, convert_units, read_file, write_file) with a granular set of Home Assistant-specific tools: `ha_service_call`, `ha_get_state`, `ha_list_entities`, `web_search`, `create_reminder`.  
+**Rationale:** Generic tools added coupling to Ollama capabilities (calculator, file I/O) that blur the boundary between HA control and general computation. Granular HA tools make the scope explicit: the LLM is for smart home automation and device queries, not general computing. User asks for math, the assistant does it conversationally without a tool call. This keeps the tool surface small and auditable.  
+**Impact:** Utility tools (calculate, convert_units, read_file, write_file) have been intentionally deferred to a future phase. The Vision Document specs will be updated to reflect the new tool list. The old generic tool names are no longer called by the system prompt.  
+**Non-negotiable:** For this phase (P7 completion, P8 completion, current state). Utility tools may be added in future phases if concrete use cases justify them.
+
+### DEC-016: Ollama num_ctx Resource Governance
+**Decided:** 2026-03-06  
+**Decision:** Explicitly set `num_ctx: 4096` in all Ollama API calls via the options dictionary in `tool_broker/llm_client.py`.  
+**Rationale:** DEC-008 requires conversation-first LLM responses, which rely on context window. Setting an explicit limit ensures predictable memory usage: Pi 5 (8GB) can safely handle 4096 context, Mac (8GB+ typically) can as well. Without explicit `num_ctx`, Ollama uses the model default, which may be unbounded for some models, causing memory pressure or OOM kills during multi-turn conversations or long context retrieval.  
+**Specification:** `num_ctx=4096` is the resource-constrained default. Can be overridden via env var `LLM_NUM_CTX` in future if needed.  
+**Non-negotiable:** Yes — this is a safety requirement for stable, long-running home automation.
+
 ---
 
 ## Pending Decisions
