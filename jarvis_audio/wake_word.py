@@ -76,7 +76,7 @@ class WakeWordDetector:
             # Format: signed 16-bit mono PCM at sample_rate
             cmd = [
                 'pw-record',
-                '--format=s16',
+                   '--format=s16',
                 '--channels=1',
                 f'--rate={self.sample_rate}',
             ]
