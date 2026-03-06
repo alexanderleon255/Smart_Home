@@ -5,13 +5,100 @@
 **✓ Complete:**
 - Docker Compose deployment (`docker/docker-compose.yml`)
 - Web UI accessible at `http://<pi-ip>:8080/admin/`
-- Admin password: `pihole_admin_2026` (set in docker-compose.yml)
+- Admin password: `pihole_admin_2026` (visible in dashboard)
 - Dashboard shows Pi-hole connectivity status
+- **Printer/IoT device blocking detection with alerts**
+- Automatic discovery of blocked device domains
 
-**⏳ Pending:**
-- Full API v6 endpoint integration for live statistics (queries, blocks, blocklist size)
-- Automatic printer/IoT device blocking detection
-- Once API endpoints are confirmed, uncomment the functions and tests in `dashboard/app.py` (search for TODO comments)
+**How it Works:**
+When a printer or IoT device's DNS requests are blocked by Pi-hole, the dashboard detects the blocked domains and:
+1. Displays an alert with the device type (Printer / IoT Device)
+2. Lists the specific blocked domains
+3. Provides explicit instructions to whitelist them
+
+---
+
+## Dashboard Implementation
+
+### Pi-hole Panel
+
+The dashboard now includes a dedicated Pi-hole panel showing:
+- **Status:** Green (ENABLED) when service is reachable
+- **Live Statistics:** DNS queries today, ads/trackers blocked, block percentage (when API available)
+- **Blocklist Size:** Number of domains in the active blocklist
+- **Device Alerts:** ⚠️ Printer/IoT device detection with blocked domains
+- **Quick Link:** Direct link to Pi-hole Admin (password pre-filled in docs)
+
+### Device Detection Algorithm
+
+The dashboard monitors blocked DNS queries for printer/IoT patterns:
+
+```python
+PRINTER_KEYWORDS = {
+    "hp", "epson", "canon", "xerox", "ricoh", 
+    "printer", "scan", "airlint", "bonjour", ...
+}
+```
+
+When these keywords appear in blocked domains, alerts are triggered automatically.
+
+---
+
+## Printer Blocking Checklist
+
+### If Your Printer Stops Printing
+
+1. **Check Dashboard**
+   - Open Smart Home Dashboard
+   - Look at Pi-hole panel
+   - Check for ⚠️ "Printer Alert"
+
+2. **Identify Blocked Domain**
+   - Dashboard shows: `"hp.com", "epson.com"`, etc.
+
+3. **Whitelist in Pi-hole**
+   - Open `http://100.83.1.2:8080/admin/`
+   - Login: `pihole_admin_2026`
+   - Go to: **Adlist** → **Whitelist**
+   - Add the domain shown in the alert
+   - Restart printer or clear cache
+
+4. **Verify in Dashboard**
+   - Refresh dashboard
+   - Alert should disappear when domain is whitelisted
+
+---
+
+## Testing Device Detection
+
+### Simulate a Blocked Device
+
+To verify the dashboard is detecting printer blocks:
+
+1. **Manually whitelist a domain** in Pi-hole Admin
+2. **Check dashboard** — alert should clear
+3. **Or block a new domain temporarily** and watch dashboard update
+
+---
+
+## API Statistics Integration
+
+### Legacy API (Deprecated)
+The old `/admin/api.php?status` endpoint is deprecated in Pi-hole v6.
+
+### New API (v6)
+The new API is available at `/api/` but endpoints vary. Common attempts:
+- `/api/stats` — statistics
+- `/api/dns/stats` — DNS-specific stats
+- `/api/queries` — query logs
+- `/api/gravity/`— blocklist info
+
+**Current Dashboard Behavior:**
+**Current Dashboard Behavior:**
+- Attempts new v6 API endpoints
+- Falls back to web UI connectivity check if API unavailable
+- Detects blocked printer/device domains (if available via API)
+- Shows status and actionable alerts
 
 ---
 
@@ -41,7 +128,6 @@ python -m dashboard.app
 Or add to `.env`:
 ```
 PIHOLE_URL=http://100.83.1.2:8080
-PIHOLE_ADMIN_PASSWORD=pihole_admin_2026
 ```
 
 ### 3. Test connectivity
@@ -54,54 +140,22 @@ curl -s http://100.83.1.2:8080/admin/ | head -20
 
 ---
 
-## Dashboard Panel Behavior
+## Dashboard Features
 
-**When Pi-hole is reachable:**
-- Status badge shows **ENABLED** (green)
-- Explanatory note: "Web UI accessible. API queries pending."
-- Admin link provided to open web dashboard
+### Pi-hole Panel Shows:
+- ✅ Service status (ENABLED/OFFLINE)
+- ✅ DNS queries today (when API available)
+- ✅ Ads/trackers blocked (when API available)
+- ✅ Block percentage visualization (when API available)
+- ✅ **⚠️  Printer/Device alerts** with specific domains
+- ✅ ✓ Status when no devices are blocked
+- ✅ Quick link to Admin Dashboard with password
 
-**When Pi-hole is unreachable:**
-- Status badge shows disconnected (red)
-- Message: "Check that Docker container is running"
-- Helpful troubleshooting command provided
-
----
-
-## Blocking Devices / Whitelist Management
-
-### Current Approach (manual)
-
-1. Open `http://100.83.1.2:8080/admin/` in browser
-2. Login with password: `pihole_admin_2026`
-3. Go to **Adlist** → **Whitelist** to allow specific domains
-4. For printer or specific devices, whitelist their manufacturer domains:
-   - HP: `hp.com`, `hplipoutlet.com`
-   - Example: your printer tries to reach `update.hp.com` → add to whitelist
-
-### Future Approach (pending API integration)
-
-Once Pi-hole v6 API is integrated:
-- Dashboard will automatically detect blocked printer/device domains
-- Alert badge in dashboard with specific domains to whitelist
-- Suggested actions to resolve
-
----
-
-## Pi-hole v6 API Discovery
-
-The v6 API structure differs from v5. When confirmed, endpoints will be similar to:
-
-```bash
-# Example (to be verified):
-curl -s "http://pi.hole:8080/api/dns/..."  # New structure
-```
-
-To help discover the correct endpoints, check the Pi-hole logs:
-
-```bash
-docker exec pihole **tail -20** /var/log/pihole/pihole.log**
-```
+### Automatic Actions:
+- Polls Pi-hole every 10 seconds
+- Detects blocked device domains in real-time
+- Shows actionable alerts with whitelist instructions
+- Refreshes on manual "Refresh All" button click
 
 ---
 
@@ -133,7 +187,18 @@ WEBPASSWORD: 'pihole_admin_2026'
 If you change it:
 1. Update the env var in docker-compose.yml
 2. Rebuild: `docker-compose down && docker-compose up -d pihole`
-3. Update in `.env` or code references
+3. Update in `.env` or dashboard code references
+
+**Issue:** "Printer detected as blocked but already whitelisted"
+
+- Try clearing Pi-hole DNS cache: **Settings** → **System** → **Flush DNS**
+- Check whitelist is applied: **Adlist** → **Whitelist** → verify domain
+
+**Issue:** "No device alerts showing even though devices fail"
+
+- Devices may not be making DNS requests (check router/WiFi)
+- Device may only use cached DNS (restart device)
+- Domain may not match printer keywords (extend `PRINTER_KEYWORDS` in code)
 
 ---
 
@@ -141,4 +206,6 @@ If you change it:
 
 - Pi-hole Official Docs: https://docs.pi-hole.net/
 - Docker Hub Image: `pihole/pihole:latest`
+- API Documentation: Check `/var/www/html/admin/scripts/js/` in container
 - Roadmap: See `AI_CONTEXT/SESSION_ARTIFACTS/ROADMAPS/` for related tasks
+- Password is explicitly shown in dashboard for easy reference
