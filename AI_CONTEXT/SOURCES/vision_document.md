@@ -54,12 +54,12 @@ The system prioritizes security, privacy, and maintainability over cloud conveni
 │  RASPBERRY PI 5     │ │  MACBOOK AIR M1     │ │  iPHONE             │
 │  (Automation Hub)   │ │  (AI Sidecar)       │ │  (Audio Relay)      │
 ├─────────────────────┤ ├─────────────────────┤ ├─────────────────────┤
-│ • Home Assistant OS │ │ • Ollama runtime    │ │ • AirPods paired    │
-│ • MQTT Broker       │ │ • Tool Broker API   │ │ • SonoBus app       │
-│ • Zigbee/Z-Wave     │ │ • Llama 3.1 8B      │ │ • HA Companion app  │
-│ • Local containers  │ │ • whisper.cpp (STT) │ │ • Push notifications│
-│ • Voice fallback    │ │ • Piper TTS         │ └─────────┬───────────┘
-└─────────┬───────────┘ │ • BlackHole audio   │           │
+│ • Debian Bookworm   │ │ • Ollama runtime    │ │ • AirPods paired    │
+│ • Tool Broker API   │ │ • Llama 3.1 8B      │ │ • SonoBus app       │
+│ • MQTT Broker       │ │ • whisper.cpp (STT) │ │ • HA Companion app  │
+│ • Zigbee/Z-Wave     │ │ • Piper TTS         │ │ • Push notifications│
+│ • Local containers  │ │ • PipeWire virtual  │ └─────────┬───────────┘
+└─────────┬───────────┘ │   audio devices     │           │
           │             │ • SonoBus bridge    │◄──────────┘
           │             │ • Session archival  │  (bidirectional audio)
           │             └─────────┬───────────┘
@@ -90,7 +90,7 @@ AirPods ◄── iPhone ◄── SonoBus ◄───────────�
                               (return audio)
 
 RECORDING:
-BlackHole captures both directions → ffmpeg → session_YYYYMMDD.wav
+PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 ```
 
 ---
@@ -106,7 +106,7 @@ BlackHole captures both directions → ffmpeg → session_YYYYMMDD.wav
 | Storage | NVMe SSD (500GB+ recommended) |
 | Network | Gigabit Ethernet (hardwired) |
 | USB | Zigbee/Z-Wave USB dongle |
-| OS | Home Assistant OS |
+| OS | Debian Bookworm aarch64 |
 
 **Role:** Deterministic automation core. Runs all time-critical automations, device integrations, and local voice processing. Does NOT run LLM inference.
 
@@ -118,9 +118,9 @@ BlackHole captures both directions → ffmpeg → session_YYYYMMDD.wav
 | RAM | 8GB unified |
 | Storage | 256GB+ SSD |
 | Network | Wi-Fi / Ethernet adapter |
-| Runtime | Ollama + Tool Broker |
+| Runtime | Ollama (LLM inference only) |
 
-**Role:** Intelligent processing layer. Handles natural language conversation, reasoning, web search, memory recall, and complex Q&A. When device control or actions are needed, the LLM includes structured tool calls alongside its conversational response. The Tool Broker validates and executes any tool calls while passing the conversational text through to the voice loop or UI.
+**Role:** Intelligent processing layer. Handles natural language conversation, reasoning, and complex Q&A via Ollama. When device control or actions are needed, the LLM includes structured tool calls alongside its conversational response. The Tool Broker (running on Pi) validates and executes any tool calls while passing the conversational text through to the voice loop or UI.
 
 ### 4.3 Client Devices
 
@@ -241,7 +241,8 @@ BlackHole captures both directions → ffmpeg → session_YYYYMMDD.wav
 
 | Component | Purpose | Status |
 |-----------|---------|--------|
-| Home Assistant OS | Core automation engine | Planned |
+| Home Assistant Core | Core automation engine (Docker) | Installed |
+| Debian Bookworm | Base OS (aarch64) | Installed |
 | Mosquitto | MQTT broker | Planned |
 | Zigbee2MQTT | Zigbee device bridge | Planned |
 | Z-Wave JS | Z-Wave device bridge | Planned |
@@ -295,17 +296,17 @@ USER VOICE PATH:
 AirPods → iPhone → SonoBus → Mac → whisper.cpp (STT) → Ollama
 
 ASSISTANT VOICE PATH:
-Ollama → Piper TTS → BlackHole → SonoBus → iPhone → AirPods
+Ollama → Piper TTS → PipeWire virtual sink → SonoBus → iPhone → AirPods
 
 RECORDING PATH:
-BlackHole mixed stream → ffmpeg → session_YYYYMMDD.wav
+PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 ```
 
 | Component | Purpose | FOSS |
 |-----------|---------|------|
 | SonoBus | Bidirectional audio bridge (iPhone↔Mac) | ✅ |
 | Tailscale | Secure tunnel for remote audio | ✅ |
-| BlackHole | Virtual audio device (recording) | ✅ |
+| PipeWire | Virtual audio devices (jarvis-tts-sink, jarvis-mic-source) | ✅ |
 | openWakeWord | Wake word detection | ✅ |
 | whisper.cpp | Live + final STT (streaming mode) | ✅ |
 | Piper TTS | Text-to-speech (OHF-Voice) | ✅ |
@@ -631,7 +632,7 @@ The LLM system prompt MUST include:
 | iPhone offline | Tailscale peer offline | Jarvis unavailable; use Pi voice |
 | whisper.cpp crash | Process monitor | Auto-restart; log incident |
 | Piper TTS failure | No audio output | Text response to dashboard |
-| BlackHole not routing | Recording empty | Alert; manual intervention needed |
+| PipeWire not routing | Recording empty | Check PipeWire module state; restart if needed |
 
 ### 8.3 Secretary Pipeline Failures
 
@@ -901,7 +902,7 @@ A **session** is defined as:
 | **Phase 7** | Autonomous Secretary | 2-3 weeks | **100% COMPLETE** |
 | **Phase 8** | Advanced AI Features | Ongoing | **100% COMPLETE** |
 
-See `ROADMAPS/2026-03-02_smart_home_master_roadmap.md` for detailed milestones.
+See `ROADMAPS/2026-03-05_smart_home_master_roadmap.md` for detailed milestones.
 
 ---
 
@@ -911,10 +912,10 @@ See `ROADMAPS/2026-03-02_smart_home_master_roadmap.md` for detailed milestones.
 |----------|---------|--------|
 | Zigbee Hardware | Sonoff ZBDongle-P vs HUSBZB-1 | PENDING |
 | Z-Wave Hardware | Zooz ZST10 vs Aeotec Z-Stick | PENDING |
-| Primary LLM | Llama 3.1 8B | **DECIDED** |
+| Primary LLM | Llama 3.1 8B | **DECIDED** (DEC-009) |
 | Web Search | Local SearXNG vs DuckDuckGo API | PENDING |
 | Camera Hardware | Reolink vs Amcrest vs Ubiquiti | PENDING |
-| Whisper Model Size | tiny/base/small | PENDING |
+| Whisper Model Size | base.en (141MB) | **DECIDED** (DEC-014) |
 | Vector DB | ChromaDB vs manual embeddings | PENDING |
 
 ---

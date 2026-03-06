@@ -23,13 +23,28 @@ These contracts are mandatory. No component may bypass them.
 
 ## 1.1 Allowed Output Modes
 
-The LLM may only output one of the following:
+The LLM may output one of the following:
 
-A)  Natural language response\
-B)  Structured tool call JSON\
+A)  Natural language response ONLY
+B)  Mixed conversational text WITH tool call JSON (conversation-first, DEC-008)
 C)  Clarification request
 
-Mixed freeform + tool JSON is not allowed.
+**DEC-008 Conversation-First Format:** The LLM MUST provide conversational text in the `text` field AND MAY include structured tool calls in the `tool_calls` array when actions are needed. The conversational text should acknowledge the user's request and explain what action is being taken.
+
+Example:
+```json
+{
+  "text": "I'll turn off the living room light for you.",
+  "tool_calls": [{
+    "tool_name": "ha_service_call",
+    "arguments": {
+      "domain": "light",
+      "service": "turn_off",
+      "entity_id": "light.living_room"
+    }
+  }]
+}
+```
 
 ------------------------------------------------------------------------
 

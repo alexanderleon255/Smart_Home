@@ -77,7 +77,7 @@ Components:
 
 -   SonoBus (bidirectional audio bridge)
 -   Tailscale (secure tunnel)
--   BlackHole (virtual audio routing)
+-   PipeWire (virtual audio routing)
 -   ffmpeg (recording)
 
 Signal Flow:
@@ -86,7 +86,7 @@ User Voice: AirPods → iPhone → SonoBus → Mac → whisper.cpp → Ollama
 
 Assistant Voice: Ollama → Piper TTS → SonoBus → iPhone → AirPods
 
-Recording: BlackHole mixed stream → ffmpeg → session.wav
+Recording: PipeWire mixed stream → ffmpeg → session.wav
 
 ------------------------------------------------------------------------
 
@@ -98,7 +98,7 @@ Speech-to-Text: whisper.cpp (stream mode)
 
 Text-to-Speech: Piper TTS (OHF-Voice)
 
-Audio Routing: BlackHole
+Audio Routing: PipeWire (virtual devices)
 
 Recording: ffmpeg
 
@@ -166,12 +166,12 @@ LLM outputs JSON tool calls. Orchestrator executes safely.
 4.  Install whisper.cpp
 5.  Install Piper TTS
 6.  Install openWakeWord
-7.  Install BlackHole
+7.  Install PipeWire (configured with virtual devices)
 8.  Install SonoBus (Mac + iPhone)
 9.  Install Tailscale
 10. Install ffmpeg
 11. Configure audio routing:
-    -   GPT/TTS output → BlackHole
+    -   GPT/TTS output → PipeWire virtual sink (jarvis-tts-sink)
     -   SonoBus output → AirPods
 12. Test full duplex audio
 13. Test streaming STT
@@ -197,7 +197,7 @@ This is mandatory for Jarvis feel.
 -   Llama 3.1 8B Q4 runs smoothly
 -   4K context responsive
 -   8K borderline but usable
--   whisper.cpp small model real-time
+-   whisper.cpp base.en model (141MB, ~500ms latency)
 -   Piper near instant
 
 70B is not practical on 8GB.
