@@ -2,10 +2,22 @@
 
 import asyncio
 import logging
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator, Optional
+
+# Env-driven binary/model paths — mirrors jarvis_audio/stt.py pattern
+_HOME = Path.home()
+_WHISPER_BIN = os.environ.get(
+    "WHISPER_CPP_PATH",
+    str(_HOME / "whisper.cpp" / "build" / "bin" / "whisper-cli"),
+)
+_WHISPER_MODEL = os.environ.get(
+    "WHISPER_MODEL_PATH",
+    str(_HOME / "whisper.cpp" / "models" / "ggml-base.en.bin"),
+)
 
 from ..config import secretary_config
 from ..schemas import TranscriptionChunk
@@ -62,15 +74,15 @@ class TranscriptionEngine:
         logger.info(f"Starting transcription stream from {audio_source}")
         
         try:
-            # Build whisper.cpp command
-            whisper_bin = Path(secretary_config.whisper_model_path).parent / "whisper-cli"
+            # Build whisper.cpp command using env-driven paths
+            whisper_bin = Path(_WHISPER_BIN)
             if not whisper_bin.exists():
                 # Fallback to system PATH
                 whisper_bin = "whisper-cli"
-            
+
             cmd = [
                 str(whisper_bin),
-                "-m", secretary_config.whisper_model,
+                "-m", _WHISPER_MODEL,
                 "-l", "en",
                 "-otxt",
                 str(audio_source)
