@@ -107,6 +107,23 @@
 **Specification:** `num_ctx=4096` is the resource-constrained default. Can be overridden via env var `LLM_NUM_CTX` in future if needed.  
 **Non-negotiable:** Yes — this is a safety requirement for stable, long-running home automation.
 
+### DEC-017: Confirmation Protocol — Inline Flags vs. Standalone Responses
+**Decided:** 2026-03-06  
+**Decision:** High-risk action confirmations use inline `requires_confirmation: boolean` flags on `EmbeddedToolCall` objects, not standalone `ConfirmationRequest` JSON responses.  
+**Rationale:** DEC-008 (Conversation-First) dictates that every LLM response contains `text` + optional `tool_calls` array. The confirmed-decision is to embed confirmation requirements in the tool call object itself (`requires_confirmation: true`), not split the response into a separate type. This keeps the response structure unified and simpler for frontends to handle.  
+**Previous approach (Interface Contracts §8):** Standalone type: `{"type": "confirmation_request", "action": "lock_all_doors", "summary": "...", "risk_level": "medium"}`  
+**Current approach (conversation-first):** Inline flag: `{"text": "...", "tool_calls": [{"tool_name": "...", "requires_confirmation": true, ...}]}`  
+**Backward Compatibility:** Legacy `process_legacy()` in `llm_client.py` still converts to old format for clients that need it.  
+**Non-negotiable:** For conversation-first mode (primary API). Legacy mode supported for backward compat only.
+
+### DEC-018: LLM Temperature — Dual-Mode Tuning
+**Decided:** 2026-03-06  
+**Decision:** Tool Broker (server-side LLM) uses temperature 0.3 for deterministic JSON output; Jarvis Modelfile (conversational mode) uses temperature 0.6 for natural dialogue.  
+**Rationale:** DEC-008's structured tool calls (`JSON` format with exact field names) require low temperature for reliability. Temperature 0.3 minimizes hallucinations and formatting errors in the `tool_calls` array. However, the conversational `text` field benefits from slightly higher temperature (0.6) for natural, varied responses.  
+**Spec reconciliation:** Vision Modelfile specifies 0.6; Jarvis Architecture v2.0 specifies 0.5-0.7 range. The Tool Broker's 0.3 is intentionally lower for JSON reliability, not a violation of spec — it's a safety enhancement for structured output.  
+**Implementation:** `tool_broker/config.py`: `LLM_TEMPERATURE = 0.3` (fixed). `jarvis_audio/Modelfile.jarvis`: `PARAMETER temperature 0.6` (conversational).  
+**Non-negotiable:** No — 0.3 can be adjusted if JSON reliability improves or higher naturalness is needed; configurable via `LLM_TEMPERATURE` env var.
+
 ---
 
 ## Pending Decisions
