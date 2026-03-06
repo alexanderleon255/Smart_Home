@@ -632,28 +632,6 @@ async def execute(
                 ha_response={"entities": entities[:50]},  # Limit response size
             )
         
-        elif request.tool_name == "web_search":
-            # Web search is not implemented in this version
-            # Would integrate with a search API
-            elapsed = int((time.time() - start_time) * 1000)
-            return NormalizedResponse(
-                status="failure",
-                message="Web search not yet implemented",
-                execution_time_ms=elapsed,
-                ha_response={},
-            )
-        
-        elif request.tool_name == "create_reminder":
-            # Reminder creation is not implemented in this version
-            # Would integrate with a todo/calendar API
-            elapsed = int((time.time() - start_time) * 1000)
-            return NormalizedResponse(
-                status="failure",
-                message="Reminder creation not yet implemented",
-                execution_time_ms=elapsed,
-                ha_response={},
-            )
-        
         else:
             raise HTTPException(status_code=400, detail=f"Unknown tool: {request.tool_name}")
             

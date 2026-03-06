@@ -283,9 +283,9 @@ class TestHighRiskDetection:
             "entity_id": "light.living_room"
         })
     
-    def test_web_search_is_not_high_risk(self):
-        """Web search should not be high risk."""
-        assert not is_high_risk_action("web_search", {"query": "pizza"})
+    def test_ha_list_entities_is_not_high_risk(self):
+        """ha_list_entities should not be high risk."""
+        assert not is_high_risk_action("ha_list_entities", {"domain": "light"})
 
 
 # ============================================================================
@@ -307,11 +307,13 @@ class TestRegisteredTools:
         tool = REGISTERED_TOOLS["ha_get_state"]
         assert "entity_id" in tool["required"]
     
-    def test_web_search_registered(self):
-        """web_search should be registered."""
-        assert "web_search" in REGISTERED_TOOLS
-        tool = REGISTERED_TOOLS["web_search"]
-        assert "query" in tool["required"]
+    def test_only_ha_tools_registered(self):
+        """Only the 3 implemented HA tools should be registered.
+        web_search and create_reminder are deferred (no backend) and must not
+        appear so the LLM never tries to call unimplemented tools."""
+        assert set(REGISTERED_TOOLS.keys()) == {
+            "ha_service_call", "ha_get_state", "ha_list_entities"
+        }
     
     def test_all_tools_have_examples(self):
         """All tools should have examples."""
@@ -387,7 +389,7 @@ async def test_tools_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert "tools" in data
-    assert len(data["tools"]) >= 4
+    assert len(data["tools"]) == 3  # ha_service_call, ha_get_state, ha_list_entities
     
     # Check tool structure
     for tool in data["tools"]:
@@ -757,7 +759,6 @@ TEST_CASES = [
     ("Turn on the living room light", "ha_service_call", "Basic light control"),
     ("What's the temperature?", "ha_get_state", "Sensor query"),
     ("List all lights", "ha_list_entities", "Entity listing"),
-    ("Search for pizza nearby", "web_search", "Web search"),
 ]
 
 

@@ -57,37 +57,11 @@ REGISTERED_TOOLS: Dict[str, Dict[str, Any]] = {
             "confidence": 0.90
         }
     },
-    "web_search": {
-        "name": "web_search",
-        "description": "Search the web and return summarized results. Use for general knowledge queries.",
-        "arguments": ["query"],
-        "required": ["query"],
-        "example": {
-            "type": "tool_call",
-            "tool_name": "web_search",
-            "arguments": {
-                "query": "best pizza nearby"
-            },
-            "confidence": 0.87
-        }
-    },
-    "create_reminder": {
-        "name": "create_reminder",
-        "description": "Create a reminder or todo item with optional due date and priority",
-        "arguments": ["title", "due", "priority"],
-        "required": ["title"],
-        "example": {
-            "type": "tool_call",
-            "tool_name": "create_reminder",
-            "arguments": {
-                "title": "Replace air filter",
-                "due": "2026-03-15T09:00:00",
-                "priority": "normal"
-            },
-            "confidence": 0.87
-        }
-    }
 }
+
+# Deferred tools (not yet implemented — removed from REGISTERED_TOOLS so LLM
+# never tries to call them): web_search (DEC-P03 pending), create_reminder (no
+# calendar backend selected yet). Re-add when implemented.
 
 # High-risk tools that require confirmation
 HIGH_RISK_TOOLS = {

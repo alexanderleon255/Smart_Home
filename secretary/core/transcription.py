@@ -177,33 +177,54 @@ class TranscriptionEngine:
         Returns:
             Full transcript text
         """
-        model = secretary_config.high_accuracy_model if high_accuracy else self.model
-        
-        logger.info(f"Processing audio file {audio_file} with model {model}")
-        
-        # Placeholder: would run whisper.cpp in batch mode
-        # Example command:
-        # whisper.cpp --model {model} --output-txt {audio_file}
-        
-        # For now, return placeholder
+        model_name = secretary_config.high_accuracy_model if high_accuracy else self.model
+
+        # Derive model file path: same directory as the default model
+        model_dir = Path(_WHISPER_MODEL).parent
+        model_path = model_dir / f"ggml-{model_name}.bin"
+        if not model_path.exists():
+            # Fall back to the default model if the derived path is missing
+            logger.warning(f"Model {model_path} not found, falling back to {_WHISPER_MODEL}")
+            model_path = Path(_WHISPER_MODEL)
+
+        whisper_bin = Path(_WHISPER_BIN)
+        if not whisper_bin.exists():
+            whisper_bin = "whisper-cli"
+
+        logger.info(f"Processing audio file {audio_file} with model {model_path}")
         output_file = self.session_dir / secretary_config.transcript_final_file
-        
+
         try:
-            # Real implementation would call whisper.cpp here
-            # subprocess.run([
-            #     "whisper.cpp",
-            #     "--model", model,
-            #     "--output-txt",
-            #     str(audio_file)
-            # ], check=True)
-            
-            # Placeholder
-            transcript = f"[High-accuracy transcript of {audio_file.name}]\n"
-            output_file.write_text(transcript)
-            
+            cmd = [
+                str(whisper_bin),
+                "-m", str(model_path),
+                "-f", str(audio_file),
+                "-l", "en",
+                "--no-timestamps",
+            ]
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                logger.error(f"whisper.cpp failed: {error_msg}")
+                raise RuntimeError(f"Transcription failed: {error_msg}")
+
+            transcript = stdout.decode().strip()
+            if not transcript:
+                logger.warning(f"whisper.cpp produced no output for {audio_file}")
+
+            output_file.write_text(transcript + "\n" if transcript else "")
             logger.info(f"Wrote final transcript to {output_file}")
             return transcript
-            
-        except subprocess.CalledProcessError as e:
+
+        except RuntimeError:
+            raise
+        except Exception as e:
             logger.error(f"Whisper processing failed: {e}")
             raise
