@@ -1,6 +1,6 @@
 # Smart Home — Current State
 
-**Last Updated:** 2026-03-06 (Rev 6.1 — Aligned to 2026-03-06 roadmap; P4 closure reflected)  
+**Last Updated:** 2026-03-06 (Rev 7.0 — All 4 assessed bugs fixed; P6-07 Modelfile done; P7-03 wired; web_search/create_reminder removed)  
 **Purpose:** What is installed, current phase, blockers, next actions  
 **Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
@@ -50,7 +50,7 @@
 - Linger enabled for boot persistence
 - Bootstrap: `deploy/bootstrap.sh`
 
-### Test Suite (248 tests, all passing)
+### Test Suite (249 tests, all passing)
 
 | Test File | Count | Coverage Area |
 |-----------|-------|---------------|
@@ -73,13 +73,13 @@
 
 ## Current Phase
 
-**Active work:** Post-assessment hardening + operational polish  
-**Overall progress:** 37/62 items complete (60%)  
-**Phases 100% done:** P2 (AI Sidecar), P7* (Secretary — transcription is placeholder), P8* (Advanced AI — has bugs)  
-**Phases >50% done:** P1 (67%), P6 (80%)  
+**Active work:** Incremental closure of P6 + P9  
+**Overall progress:** 42/62 items complete (68%)  
+**Phases 100% done:** P2 (AI Sidecar), P4 (Security), P7 (Secretary — fully wired), P8 (Advanced AI — all bugs fixed)  
+**Phases >50% done:** P1 (67%), P6 (90% — only live testing remains)  
 **Phases not started:** P3 (superseded by P6), P5 (camera hardware not acquired), P9 (Chat Tier Packs)  
-**Main blockers:** Zigbee USB dongle (P1-04), camera hardware (P5), live voice testing (P6-10)  
-**Total tests:** 248 passing (~26s)  
+**Main blockers:** Zigbee USB dongle (P1-04), camera hardware (P5), iPhone SonoBus peer (P6-10)  
+**Total tests:** 249 passing (~26s)  
 **Total LOC:** 12,968 (9,582 source + 3,386 test)
 
 ---
@@ -91,7 +91,7 @@
 | Source LOC | 9,582 |
 | Test LOC | 3,386 |
 | Total LOC | 12,968 |
-| Total tests | 248 (all passing) |
+| Total tests | 249 (all passing) |
 | Test time | ~26 seconds |
 | Packages | 11 |
 | Python version | 3.12.2 (canonical) |
@@ -111,14 +111,14 @@
 
 ---
 
-## Known Bugs (from 2026-03-04 assessment)
+## Known Bugs — All Resolved (2026-03-06)
 
-| Severity | File | Issue |
-|----------|------|-------|
-| **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder — not real transcription |
-| **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist |
-| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) |
-| **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered in tools.py but return "not implemented" in main.py |
+| Severity | File | Issue | Fixed |
+|----------|------|-------|-------|
+| ~~HIGH~~ | `secretary/core/transcription.py` | ~~Hardcoded placeholder~~ | ✅ `start_streaming()` + `process_audio_file()` wired to real whisper.cpp (commits 67efd8f, 0dee927) |
+| ~~MEDIUM~~ | `memory/context_builder.py:174` | ~~`search_conversations()` didn't exist~~ | ✅ → `search()` (commit 8769d5f) |
+| ~~MEDIUM~~ | `memory/vector_store.py` | ~~ID collisions via hash()~~ | ✅ → `uuid4()` (commit 8769d5f) |
+| ~~LOW~~ | `tool_broker/tools.py` + `main.py` | ~~`web_search`, `create_reminder` unimplemented~~ | ✅ Removed from REGISTERED_TOOLS + dead branches removed (commit 0dee927) |
 
 ---
 
@@ -131,9 +131,9 @@
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 100% | ACL/firewall artifacts + monitoring alerts + audit reports + TTS shell fix |
 | P5 Cameras | 0% | Camera hardware not acquired |
-| P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper installed |
-| P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
-| P8 Advanced AI | 100%* | *Vector store has ID collision bug, context_builder has method bug |
+| P6 Jarvis Voice | 90% | SonoBus + PipeWire + whisper + Piper installed; Modelfile DEC-008 done |
+| P7 Secretary | 100% | start_streaming() + process_audio_file() both wired to real whisper.cpp |
+| P8 Advanced AI | 100% | Vector store UUID4 IDs; context_builder search() call fixed |
 | P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling |
 
 ---
@@ -150,24 +150,22 @@
 
 ## Next Actions (Priority Order)
 
-### Tier 1: Fix Now
-1. Fix `context_builder.py` `search_conversations()` → `search()` method call
-2. Fix vector store ID collisions → use UUID
-3. Wire whisper.cpp into `secretary/core/transcription.py`
+### Tier 1: Operational (no blockers)
+1. P6-10 live voice testing — needs iPhone SonoBus peer
+2. Apply Tailscale ACLs + device tags in admin console (manual ops)
+3. P9 Chat Tier Packs (5 items — pure tooling/docs, no code dependencies)
 
-### Tier 2: Harden
-4. Persistent httpx.AsyncClient pooling
-5. ~~systemd service units~~ ✅ DONE (P1-09, deploy/systemd/)
-6. Apply Tailscale ACLs + device tags in admin console
-7. Remove/disable unimplemented tools
+### Tier 2: Harden (reliability)
+4. Persistent httpx.AsyncClient pooling in `tool_broker/ha_client.py`
+5. `POST /v1/process/stream` SSE endpoint
+6. Async `tool_broker_client.py`
+7. Complexity classifier tests
+8. Periodic health watchdog with notifications
 
-### Tier 3: Enhance
-10. `POST /v1/process/stream` SSE endpoint
-11. Async `tool_broker_client.py`
-12. Split `dashboard/app.py` into modules
-13. Complexity classifier tests
-14. Periodic health watchdog
-15. Jarvis Modelfile (P6-07)
+### Tier 3: Hardware-blocked
+9. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
+10. P5 Camera integration (awaiting DEC-005 hardware decision)
+11. P3 HA Voice Pipeline (low priority — superseded by P6)
 
 ---
 

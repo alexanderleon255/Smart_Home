@@ -1,7 +1,7 @@
 # Smart Home – Current State
 
 **Last Updated:** 2026-03-06  
-**Rev:** 6.1 (Aligned to 2026-03-06 roadmap/tracker updates; P4 complete)  
+**Rev:** 7.0 (All 4 assessed bugs fixed; P6-07 Modelfile done; P7-03 wired; web_search/create_reminder removed)  
 **Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
@@ -93,7 +93,7 @@
 | Source LOC | 9,582 |
 | Test LOC | 3,386 |
 | Total LOC | 12,968 |
-| Total tests | 248 (all passing) |
+| Total tests | 249 (all passing) |
 | Test time | ~26 seconds |
 | Packages | 11 (tool_broker, jarvis, jarvis_audio, memory, secretary, dashboard, digests, patterns, cameras, satellites, tests) |
 
@@ -127,60 +127,63 @@
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 100% | ACL/firewall artifacts + monitor alerts + audit reports + TTS shell fix |
 | P5 Cameras | 0% | Camera hardware not acquired |
-| P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper all installed |
-| P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
-| P8 Advanced AI | 100%* | *Vector store has ID collision bug; context_builder has method call bug |
+| P6 Jarvis Voice | 90% | SonoBus + PipeWire + whisper + Piper all installed; Modelfile DEC-008 done |
+| P7 Secretary | 100% | start_streaming() + process_audio_file() both wired to real whisper.cpp |
+| P8 Advanced AI | 100% | Vector store UUID4 IDs; context_builder search() call fixed |
 | P9 Chat Tier Packs | 0% | Not started — infrastructure/tooling phase |
 
-**Overall: 41/62 items (66%)**
+**Overall: 42/62 items (68%)**
 
 ---
 
-## Known Bugs (from 2026-03-04 assessment)
+## Known Bugs — All Resolved (2026-03-06)
 
-| Severity | File | Issue |
-|----------|------|-------|
-| **HIGH** | `secretary/core/transcription.py` | Returns hardcoded placeholder — not real transcription |
-| **MEDIUM** | `memory/context_builder.py:174` | Calls `search_conversations()` — method doesn't exist |
-| **MEDIUM** | `memory/vector_store.py` | ID collisions via `hash(text) % 10000` (line 84) and `hash(text) % 100000` (lines 114, 146) |
-| **LOW** | `tool_broker/tools.py` + `main.py` | `web_search`, `create_reminder` registered in tools.py but return "not implemented" in main.py |
+| Severity | File | Issue | Fixed |
+|----------|------|-------|-------|
+| ~~HIGH~~ | `secretary/core/transcription.py` | ~~Hardcoded placeholder~~ | ✅ Both `start_streaming()` + `process_audio_file()` wired to real whisper.cpp (commits 67efd8f, 0dee927) |
+| ~~MEDIUM~~ | `memory/context_builder.py:174` | ~~`search_conversations()` didn't exist~~ | ✅ → `search()` (commit 8769d5f) |
+| ~~MEDIUM~~ | `memory/vector_store.py` | ~~ID collisions via hash()~~ | ✅ → `uuid4()` (commit 8769d5f) |
+| ~~LOW~~ | `tool_broker/tools.py` + `main.py` | ~~`web_search`, `create_reminder` unimplemented~~ | ✅ Removed from REGISTERED_TOOLS + dead branches removed (commit 0dee927) |
 
 ---
 
-## Recent Changes (2026-03-05)
+## Recent Changes (2026-03-06 — this session)
 
-1. **Service persistence (P1-09)** — 5 systemd user units, deploy/bootstrap.sh, linger enabled (commit `44d8594`)
-2. **HADiagnostic + TierDiagnostic pattern** — Unified diagnostic dataclass across HA client, dashboard, Jarvis client, 26 new tests in test_ha_diagnostics.py (commit `44d8594`)
-3. **Dashboard chat visibility (P2-08)** — Audit middleware captures response body (output_summary, tier, tool_calls) for /v1/process; dashboard polls audit every 3s and injects ALL external interactions (curl, Jarvis, API) into chat panel with source badges (commit `12612cc`)
-4. **248 tests passing** — Up from 222 (26 new HA diagnostic tests)
+1. **All 4 assessed bugs fixed** (commits 8769d5f, 67efd8f, 0dee927):
+   - `secretary/core/transcription.py`: `start_streaming()` + `process_audio_file()` wired to real whisper.cpp via `asyncio.create_subprocess_exec`; model-path derivation with fallback
+   - `memory/context_builder.py:174`: `search_conversations()` → `search()`
+   - `memory/vector_store.py`: `hash(text) % N` → `uuid4()` (3 occurrences)
+   - `tool_broker/tools.py` + `main.py`: `web_search` + `create_reminder` removed from REGISTERED_TOOLS; dead elif branches removed
+2. **P6-07 Jarvis Modelfile (P6-07 complete)** — `jarvis_audio/Modelfile.jarvis` rewritten to DEC-008 format (`text` + `tool_calls` array); 3 HA tools only; high-risk confirmation example; (commit 0dee927)
+3. **CORS origins fixed** — `tool_broker/config.py` default now includes `:8123` and `homeassistant.local:8123` (commit 8769d5f)
+4. **249 tests passing** — net -1 from removing the web_search parametrized test case
 
-### Earlier changes (2026-03-04)
-5. **Graceful LLM tier failure handling** — TierStatus enum, TierDiagnostic, per-tier error messages, 3-state health (commit `f78f369`)
-6. **28 new tests** — `test_llm_tier_failures.py` covering all failure combinations
-7. **Full codebase assessment** — Letter-graded report at `AI_CONTEXT/SESSION_ARTIFACTS/REPORTS/2026-03-04_codebase_assessment.md`; grade B+
+### Earlier changes (2026-03-05–06)
+5. **Service persistence (P1-09)** — 5 systemd user units, deploy/bootstrap.sh, linger enabled
+6. **Dashboard chat visibility (P2-08)** — Audit middleware + dashboard polling for all-source LLM interaction visibility
+7. **P4 Security closure** — ACL policy, firewall scripts, security-monitor.sh, run-security-audit.sh, TTS shell injection fix
 
 ---
 
 ## Known Issues / Next Steps
 
-### Tier 1: Fix Now (Security / Correctness)
-1. Fix context_builder `search_conversations()` → `search()`
-2. Fix vector store ID collisions → UUID
-3. Wire whisper.cpp into secretary transcription
+### Tier 1: Operational (no code blockers)
+1. Apply Tailscale ACLs + device tags in admin console (manual ops)
+2. P6-10 live voice testing — needs iPhone SonoBus peer
+3. P9 Chat Tier Packs (5 items — docs/tooling, no code dependencies)
 
 ### Tier 2: Harden (Reliability / Ops)
-4. Persistent httpx.AsyncClient pooling
-5. ~~systemd service units~~ ✅ DONE (P1-09, deploy/systemd/)
-6. Apply Tailscale ACLs + device tags in admin console
-7. Remove/disable unimplemented tools
+4. Persistent httpx.AsyncClient pooling in `tool_broker/ha_client.py`
+5. `POST /v1/process/stream` SSE endpoint
+6. Async `tool_broker_client.py`
+7. Complexity classifier tests
+8. Health watchdog with notifications
+9. Split `dashboard/app.py` into modules
 
-### Tier 3: Enhance (Value-Add)
-10. `POST /v1/process/stream` SSE endpoint
-11. Async `tool_broker_client.py`
-12. Split `dashboard/app.py` into modules
-13. Complexity classifier tests
-14. Health watchdog with notifications
-15. Jarvis Modelfile (P6-07)
+### Tier 3: Hardware-blocked
+10. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
+11. P5 Camera integration (awaiting DEC-005 hardware decision)
+12. P3 HA Voice Pipeline (low priority — superseded by P6)
 
 ---
 
