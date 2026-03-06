@@ -77,8 +77,8 @@
 **Overall progress:** 37/62 items complete (60%)  
 **Phases 100% done:** P2 (AI Sidecar), P7* (Secretary — transcription is placeholder), P8* (Advanced AI — has bugs)  
 **Phases >50% done:** P1 (67%), P6 (80%)  
-**Phases not started:** P3 (superseded by P6), P5 (hardware blocked), P9 (Chat Tier Packs)  
-**Main blockers:** Zigbee hardware (P1-04), camera hardware (P5), live voice testing (P6-10)  
+**Phases not started:** P3 (superseded by P6), P5 (camera hardware not acquired), P9 (Chat Tier Packs)  
+**Main blockers:** Zigbee USB dongle (P1-04), camera hardware (P5), live voice testing (P6-10)  
 **Total tests:** 248 passing (~26s)  
 **Total LOC:** 12,968 (9,582 source + 3,386 test)
 
@@ -132,7 +132,7 @@
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 33% | Tailscale mesh + PolicyGate + auth + rate limiting |
-| P5 Cameras | 0% | Hardware not acquired |
+| P5 Cameras | 0% | Camera hardware not acquired |
 | P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper installed |
 | P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
 | P8 Advanced AI | 100%* | *Vector store has ID collision bug, context_builder has method bug |
@@ -144,7 +144,7 @@
 
 | Blocker | Blocks | Resolution |
 |---------|--------|------------|
-| Zigbee dongle not acquired | P1-04 | Purchase Sonoff ZBDongle-P or HUSBZB-1 |
+| Zigbee USB dongle not acquired | P1-04 | Purchase Sonoff ZBDongle-P or HUSBZB-1 |
 | Camera hardware not acquired | P5 entirely | Purchase cameras (DEC-005 pending) |
 | iPhone SonoBus testing | P6-10 | Pair iPhone SonoBus app with Pi |
 | TTS shell injection | Voice pipeline unsafe | Fix `shell=True` → `subprocess.Popen` (Tier 1 priority) |

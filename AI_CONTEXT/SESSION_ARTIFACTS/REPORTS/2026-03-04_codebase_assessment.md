@@ -12,7 +12,7 @@
 
 | Category | Grade | Summary |
 |----------|-------|---------|
-| **Overall Completion** | **B+** | 35/55 roadmap items (64%). Core platform functional. P2, P7, P8 complete. P3, P5 blocked on hardware. |
+| **Overall Completion** | **B+** | 35/55 roadmap items (64%). Core platform functional. P2, P7, P8 complete. P3 superseded by P6. P5 blocked on camera hardware. |
 | **Implementation Strength** | **B+** | Tool Broker is production-grade. Memory, voice, secretary have solid foundations but need hardening. |
 | **Scalability** | **B** | Single-process architecture is fine for home use but has unbounded logs, per-request HTTP clients, and synchronous blocking points. |
 | **Security** | **B-** | Good HA-side controls (PolicyGate, entity validation, tool whitelisting). Two HIGH-severity shell injection vulnerabilities in TTS modules. |
@@ -35,8 +35,8 @@
 - TV on/off verified via HA service calls — real device control proven
 
 **What's blocking:**
-- P1-04 Zigbee: Hardware not acquired (DEC-P01 pending)
-- P1-05 Z-Wave: Optional, hardware not acquired
+- P1-04 Zigbee: USB dongle not acquired (DEC-P01 pending)
+- P1-05 Z-Wave: Optional, USB dongle not acquired
 - P1-08 Backup: No automated backup configured — **risk** for a production Pi
 
 **Value-add improvements:**
@@ -85,7 +85,7 @@ Correctly noted as superseded by P6 (Jarvis). P3 can serve as HA Assist fallback
 
 ### Phase 5: Camera Integration — 0% (0/5) — Grade: N/A
 
-Blocked on hardware acquisition. `cameras/event_processor.py` exists as a software module (333 LOC, 13 tests) ready for when cameras are acquired. Module is functional but unsophisticated — keyword-based categorization should use vision model output instead.
+Blocked on camera hardware acquisition. `cameras/event_processor.py` exists as a software module (333 LOC, 13 tests) ready for when cameras are acquired. Module is functional but unsophisticated — keyword-based categorization should use vision model output instead.
 
 ### Phase 6: Jarvis Real-Time Voice — 80% (8/10) — Grade: B+
 
@@ -386,7 +386,7 @@ The complexity classifier (`classify_complexity()`) in `llm_client.py` drives al
 
 | Category | Grade | Rationale |
 |----------|-------|-----------|
-| **Completion** | **B+** | 64% of roadmap. Core platform works. Hardware-blocked phases are unavoidable. Secretary transcription is a notable gap. |
+| **Completion** | **B+** | 64% of roadmap. Core platform works. P5 (cameras) blocked on camera hardware purchase. Secretary transcription is a notable gap. |
 | **Implementation Strength** | **B+** | Tool Broker is A-tier. Memory and voice are solid B-tier. Secretary transcription and vector store have real bugs. |
 | **Scalability** | **B** | Adequate for home use. Unbounded logs, per-request clients, and sync blocking are the main concerns. |
 | **Security** | **B-** | Good HA-side controls. TTS shell injection is a serious violation of the project's own security principles. |

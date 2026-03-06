@@ -126,7 +126,7 @@
 | P2 AI Sidecar | 100% | Tool Broker + tiered LLM + graceful failures + dashboard + chat visibility |
 | P3 Voice (HA) | 0% | Superseded by P6 Jarvis |
 | P4 Security | 33% | Tailscale mesh + PolicyGate + auth |
-| P5 Cameras | 0% | Hardware not acquired |
+| P5 Cameras | 0% | Camera hardware not acquired |
 | P6 Jarvis Voice | 80% | SonoBus + PipeWire + whisper + Piper all installed |
 | P7 Secretary | 100%* | *Transcription is placeholder — needs whisper.cpp wiring |
 | P8 Advanced AI | 100%* | *Vector store has ID collision bug; context_builder has method call bug |

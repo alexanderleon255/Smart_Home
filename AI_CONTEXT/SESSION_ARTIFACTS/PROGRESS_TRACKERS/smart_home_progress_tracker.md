@@ -112,7 +112,7 @@
 | P5-04 | Motion Detection & Recording | ⬜ NOT STARTED | - | |
 | P5-05 | Camera Security Hardening | ⬜ NOT STARTED | - | |
 
-**Phase 5 Blockers:** Camera hardware not acquired.
+**Phase 5 Blockers:** Camera hardware not acquired (separate from Pi — Pi is fully operational).
 
 ---
 

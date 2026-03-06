@@ -80,7 +80,7 @@ Tests            → 194 passing (~25s)
 
 ### Medium-term
 7. **P3: HA Voice Pipeline** — Decide if HA Assist integration needed alongside Jarvis
-8. **P5: Camera integration** — Blocked on hardware purchase
+8. **P5: Camera integration** — Blocked on camera hardware purchase (Pi is fully operational)
 9. **P4-05: Monitoring** — Logging and alerting setup
 10. **P4-06: Security audit** — Full penetration test equivalent
 

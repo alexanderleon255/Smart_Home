@@ -16,15 +16,15 @@
 
 The platform is in **strong shape**. All previously-critical documentation drift has been resolved. LLM_RUNTIME schemas now match the broker exactly, the progress tracker and vision phase table are current, and test coverage has expanded from 37 to **136 passing tests** across 10 test files.
 
-**No critical or high-severity gaps remain in the actionable category.** The three remaining open gaps (GAP-05, GAP-12, GAP-13) are all blocked on Phase 1 hardware acquisition and cannot be resolved without a live Home Assistant instance.
+**No critical or high-severity gaps remain in the actionable category.** GAP-05 is functionally resolved (48 live HA entities; `entity_registry.json` remains a placeholder). GAP-12 needs live deployment context. GAP-13 needs HA Lovelace dashboard work. Pi 5 and Home Assistant have been operational since 2026-03-03.
 
 ### Overall Readiness by Area
 - **Tool Broker core (LLM → validation → HA call):** **COMPLETE** — Auth, rate limiting, PolicyGate, entity validation, all endpoints. 34 tests.
 - **Memory architecture (4-tier):** **COMPLETE** — Structured state, event log, vector store, context builder. 29 tests.
-- **Jarvis voice pipeline:** **PARTIAL/GOOD** — Voice loop, STT streaming, barge-in, TTS exist. 10 tests. SonoBus/BlackHole audio bridge pending hardware.
+- **Jarvis voice pipeline:** **PARTIAL/GOOD** — Voice loop, STT streaming, barge-in, TTS exist. 10 tests. SonoBus built and running on Pi; PipeWire virtual audio routing operational.
 - **Secretary pipeline:** **COMPLETE** — All 7 P7 items implemented. 15 tests.
 - **Advanced features (P8 set):** **COMPLETE** — All 6 modules implemented. Dedicated tests for patterns (13), digests (15), cameras (11), satellites (9).
-- **Security hardening:** **GOOD** — API-key auth, rate limiting, CORS allowlist, PolicyGate. Tailscale/firewall pending P1 hardware.
+- **Security hardening:** **GOOD** — API-key auth, rate limiting, CORS allowlist, PolicyGate. Tailscale mesh operational. ACLs and firewall config remaining.
 - **Documentation coherence:** **ALIGNED** — LLM_RUNTIME schemas match broker, vision phases current, progress tracker current.
 - **Operationalization:** **PARTIAL** — Runbook paths filled; no launchd templates yet.
 
@@ -87,7 +87,7 @@ The platform is in **strong shape**. All previously-critical documentation drift
 | GAP-02 | `few_shot_examples.json` wrong format | CRITICAL | ✅ RESOLVED | Rewritten to v2.0, matches broker schemas |
 | GAP-03 | Progress tracker stale | HIGH | ✅ RESOLVED | Updated to Rev 3.0 |
 | GAP-04 | Vision doc phase table stale | HIGH | ✅ RESOLVED | Section 14 phases updated |
-| GAP-05 | Entity registry placeholder | HIGH | 🔒 BLOCKED | Needs live HA (Phase 1 hardware) |
+| GAP-05 | Entity registry placeholder | HIGH | ✅ FUNCTIONALLY RESOLVED | 48 live HA entities in validator cache; `entity_registry.json` is placeholder |
 | GAP-06 | No context_builder.py | HIGH | ✅ RESOLVED | Implemented (266 lines, 26 tests) |
 | GAP-07 | Runbook TBD paths | MEDIUM | ✅ RESOLVED | Paths filled |
 | GAP-08 | Missing SOURCES docs | MEDIUM | ✅ RESOLVED | `current_state.md` + `decisions_log.md` created |
@@ -95,25 +95,25 @@ The platform is in **strong shape**. All previously-critical documentation drift
 | GAP-10 | System prompt references unimplemented caps | MEDIUM | ✅ RESOLVED | Deployment notes reference context_builder |
 | GAP-11 | No tests for 6 packages | LOW | ✅ RESOLVED | 7 new test files (99 tests) |
 | GAP-12 | Location/preferences placeholders | LOW | 🔒 BLOCKED | Needs deployment |
-| GAP-13 | Dashboard YAML not tied to HA | LOW | 🔒 BLOCKED | Needs P1 hardware |
+| GAP-13 | Dashboard YAML not tied to HA | LOW | 🔒 BLOCKED | Needs HA Lovelace dashboard work (Pi + HA are operational) |
 
-**Score: 10/13 resolved, 3/13 hardware-blocked.**
+**Score: 11/13 resolved (GAP-05 functionally resolved), 2/13 remaining (GAP-12, GAP-13 — deployment/config work, NOT hardware-blocked).**
 
 ---
 
-## 4) Hardware-Blocked Gaps (No Action Possible)
+## 4) Remaining Open Gaps
 
-### GAP-05: Entity registry placeholder
+### GAP-05: Entity registry placeholder — FUNCTIONALLY RESOLVED
 `LLM_RUNTIME/entity_registry.json` has 4 placeholder entities, references nonexistent `ha_sync.py`.
-**Unblocks when:** Pi 5 + Home Assistant running.
+**Status:** Pi 5 and Home Assistant have been fully operational since 2026-03-03. The live HA validator cache has 48 entities. The JSON file is a placeholder for offline reference only. Functional concern is resolved.
 
 ### GAP-12: Location context and user preferences placeholder
 `location_context.yaml` and `user_preferences.json` have `[TBD]` values.
-**Unblocks when:** System deployed to actual home.
+**Unblocks when:** User fills in actual location/preference data.
 
 ### GAP-13: Dashboard YAML not tied to HA Lovelace
 Wireframes exist but no production Lovelace YAML.
-**Unblocks when:** P1 hardware acquired.
+**Unblocks when:** HA Lovelace dashboard configuration work is done (Pi and HA are operational).
 
 ---
 
@@ -180,22 +180,22 @@ Both are placeholder templates with section headers but no real content. Cannot 
 | **LOW** | GAP-17 | Create `chat_operating_protocol.md` | 1h | OPEN |
 | **LOW** | GAP-19 | Fix LLM client JSON parsing for nested objects | 15m | OPEN |
 | **LOW** | GAP-20 | Load system prompt from files at startup | 30m | OPEN |
-| **INFO** | GAP-18 | Populate automation_catalog + device_inventory | — | BLOCKED (hardware) |
-| **Blocked** | GAP-05 | Create `ha_sync.py` + populate entity registry | 2-4h | BLOCKED (hardware) |
-| **Blocked** | GAP-12 | Fill location/preferences TBD values | 15m | BLOCKED (deployment) |
-| **Blocked** | GAP-13 | Generate Lovelace YAML from wireframes | 2-4h | BLOCKED (hardware) |
+| **INFO** | GAP-18 | Populate automation_catalog + device_inventory | — | OPEN (Pi + HA operational; populate with real device data) |
+| **Resolved** | GAP-05 | Create `ha_sync.py` + populate entity registry | 2-4h | FUNCTIONALLY RESOLVED (48 live entities; JSON file is placeholder) |
+| **Blocked** | GAP-12 | Fill location/preferences TBD values | 15m | BLOCKED (needs user input) |
+| **Open** | GAP-13 | Generate Lovelace YAML from wireframes | 2-4h | OPEN (Pi + HA operational; needs Lovelace config work) |
 
 ---
 
 ## 8) Final Verdict
 
-The project is in **excellent shape** for a pre-hardware platform. All critical and high-severity actionable gaps have been closed:
+The project is in **excellent shape**. The Pi 5 and Home Assistant have been fully operational since 2026-03-03. All critical and high-severity actionable gaps have been closed:
 
 - **136 tests passing** (up from 37 at start of gap closure).
 - **LLM_RUNTIME schemas perfectly aligned** with broker implementation.
 - **4-tier memory architecture complete** including context builder.
 - **Documentation suite current** — current_state, decisions_log, security rules, runbook, progress tracker, vision phases all accurate.
 
-**The single blocker for forward progress is Phase 1 hardware acquisition** (Pi 5, NVMe, Zigbee dongle). Once acquired, the remaining gaps (entity registry, location context, dashboard YAML) can be closed rapidly.
+**Pi 5 and Home Assistant have been fully operational since 2026-03-03.** The entity registry gap (GAP-05) is functionally resolved with 48 live entities. The only peripheral hardware not yet acquired is Zigbee/Z-Wave USB dongles (P1-04, P1-05) and cameras (P5). These do not block the majority of remaining work.
 
 The remaining open gaps (GAP-15 through GAP-20) are all LOW severity quality improvements that would enhance maintainability but do not block any functionality.

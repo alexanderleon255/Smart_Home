@@ -20,7 +20,7 @@
 | **P2** | AI Sidecar | 8 | 8 | 🟢 100% |
 | **P3** | Voice Pipeline (HA-native) | 6 | 0 | 🔴 0% (superseded by P6) |
 | **P4** | Security Hardening | 6 | 2 | 🟡 33% |
-| **P5** | Camera Integration | 5 | 0 | 🔴 0% (blocked: hardware) |
+| **P5** | Camera Integration | 5 | 0 | 🔴 0% (blocked: cameras not acquired) |
 | **P6** | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | **P7** | Autonomous Secretary | 7 | 7 | 🟢 100%* |
 | **P8** | Advanced AI Features | 6 | 6 | 🟢 100%* |
@@ -67,7 +67,7 @@ WAVE 2 (Executed 2026-03-02):
 └── Issue #5: Advanced         ✅ COMPLETE
 ```
 
-**Remaining work** is infrastructure deployment (P1), security hardening (P4), hardware-blocked items (P5), and polish (P6-07, P6-10, P9).
+**Remaining work** is peripheral acquisition (P1: Zigbee/Z-Wave dongles, backup), security hardening (P4: ACLs, firewall), camera integration (P5: cameras not acquired), and polish (P6-07, P6-10, P9).
 
 ---
 
@@ -75,7 +75,7 @@ WAVE 2 (Executed 2026-03-02):
 
 **Goal:** Establish Raspberry Pi 5 as deterministic automation hub.  
 **Platform Decision:** Debian Bookworm + HA Core in Docker (DEC-014). NOT Home Assistant OS.  
-**Dependencies:** Hardware acquired
+**Status:** Pi 5 hardware acquired and fully operational (2026-03-03). Remaining items are peripheral dongles (Zigbee, Z-Wave) and backup config.
 
 ### P1-01: Hardware Assembly — ✅ COMPLETE (2026-03-03)
 **Effort:** 2h | **Complexity:** LOW
@@ -240,7 +240,7 @@ WAVE 2 (Executed 2026-03-02):
 
 **Goal:** HA Assist voice pipeline with local STT/TTS add-ons.  
 **Status:** Superseded by P6 (Jarvis native voice). May be revisited for HA Assist integration as fallback path.  
-**Dependencies:** P1 (hardware)
+**Dependencies:** None (P1 hardware is operational; P6 provides equivalent capability natively)
 
 ### P3-01: Voice Pipeline Add-ons — ⬜ NOT STARTED
 - [ ] Install Whisper, Piper, openWakeWord add-ons in HA
@@ -539,7 +539,7 @@ These bugs were identified during the full codebase assessment. They should be f
 
 | ID | Topic | Options | Status |
 |----|-------|---------|--------|
-| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | ⬜ PENDING (hardware) |
+| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | ⬜ PENDING (dongle not purchased) |
 | DEC-P02 | Z-Wave Dongle | Zooz ZST10, Aeotec Z-Stick | ⬜ PENDING |
 | DEC-P03 | Web Search Backend | Local SearXNG, DuckDuckGo API | ⬜ PENDING |
 | DEC-P04 | Camera Hardware | Reolink, Amcrest, Ubiquiti | ⬜ PENDING |

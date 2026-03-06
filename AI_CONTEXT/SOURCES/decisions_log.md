@@ -99,7 +99,7 @@
 
 | ID | Topic | Options | Status |
 |----|-------|---------|--------|
-| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | PENDING (blocked by hardware purchase) |
+| DEC-P01 | Zigbee Dongle | Sonoff ZBDongle-P, HUSBZB-1 | PENDING (Zigbee USB dongle not purchased) |
 | DEC-P02 | Z-Wave Dongle | Zooz ZST10, Aeotec Z-Stick | PENDING |
 | DEC-P03 | Web Search Backend | Local SearXNG, DuckDuckGo API | PENDING |
 | DEC-P04 | Camera Hardware | Reolink, Amcrest, Ubiquiti | PENDING |
