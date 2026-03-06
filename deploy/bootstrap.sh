@@ -212,6 +212,25 @@ install_tailscale() {
 }
 
 # =============================================================================
+# 10. Firewall (UFW) — optional but recommended
+# =============================================================================
+setup_firewall() {
+    local fw_script="$SCRIPT_DIR/security/setup-firewall-pi.sh"
+    if [[ ! -f "$fw_script" ]]; then
+        warn "Firewall script not found at $fw_script — skipping"
+        return
+    fi
+    echo ""
+    read -rp "Set up UFW firewall? (recommended for security) [Y/n] " yn
+    yn="${yn:-Y}"
+    if [[ "$yn" =~ ^[Yy] ]]; then
+        sudo bash "$fw_script"
+    else
+        warn "Skipping firewall — run 'sudo deploy/security/setup-firewall-pi.sh' later"
+    fi
+}
+
+# =============================================================================
 # Verification
 # =============================================================================
 verify() {
@@ -266,6 +285,8 @@ verify() {
     echo "  2. Set HA_TOKEN in $REPO_DIR/.env or environment"
     echo "  3. If using sidecar LLM: set SIDECAR_OLLAMA_URL in environment"
     echo "  4. View dashboard at http://localhost:8050"
+    echo "  5. Apply Tailscale ACLs: see deploy/security/README.md"
+    echo "  6. Verify security: ./deploy/security/verify-security.sh"
     echo ""
 }
 
@@ -290,6 +311,7 @@ main() {
     pull_model
     enable_services
     install_tailscale
+    setup_firewall
     verify
 }
 

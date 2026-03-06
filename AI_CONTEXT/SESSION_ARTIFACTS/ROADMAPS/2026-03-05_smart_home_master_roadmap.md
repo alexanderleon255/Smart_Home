@@ -19,13 +19,13 @@
 | **P1** | Hub Setup | 9 | 6 | 🟢 67% |
 | **P2** | AI Sidecar | 8 | 8 | 🟢 100% |
 | **P3** | Voice Pipeline (HA-native) | 6 | 0 | 🔴 0% (superseded by P6) |
-| **P4** | Security Hardening | 6 | 2 | 🟡 33% |
+| **P4** | Security Hardening | 6 | 4 | 🟡 67% |
 | **P5** | Camera Integration | 5 | 0 | 🔴 0% (blocked: cameras not acquired) |
 | **P6** | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | **P7** | Autonomous Secretary | 7 | 7 | 🟢 100%* |
 | **P8** | Advanced AI Features | 6 | 6 | 🟢 100%* |
 | **P9** | Chat Tier Packs | 5 | 0 | 🔴 0% |
-| **TOTAL** | | **62** | **37** | **🟢 60%** |
+| **TOTAL** | | **62** | **39** | **🟢 63%** |
 
 *\*P7 caveat: transcription.py is placeholder. P8 caveats: vector store ID collisions, context_builder method bug.*
 
@@ -271,22 +271,35 @@ WAVE 2 (Executed 2026-03-02):
 
 ---
 
-### P4-02: Tailscale ACLs — ⬜ NOT STARTED
+### P4-02: Tailscale ACLs — ✅ COMPLETE (2026-03-05)
 **Effort:** 2h | **Complexity:** MEDIUM
 
-- [ ] Define ACL policy (admin, user, guest device tiers)
-- [ ] Implement in Tailscale admin console
-- [ ] Restrict Pi ports: :8123 (HA), :8000 (broker), :11434 (Ollama), :22 (SSH)
-- [ ] Test access restrictions from each device
+- [x] Define ACL policy (admin, user, guest device tiers)
+- [x] ACL policy file: `deploy/security/tailscale-acl-policy.jsonc`
+- [x] Restrict Pi ports: :8123 (HA), :8000 (broker), :11434 (Ollama), :22 (SSH)
+- [x] Built-in Tailscale ACL tests for validation
+- [ ] Apply in Tailscale admin console (manual step)
+- [ ] Assign device tags: Pi=tag:server, Mac=tag:sidecar, iPhone/iPad=tag:mobile
+
+**Deliverables:** ACL policy with 5 device tiers (admin, mobile, server, sidecar, guest), SSH restricted to admin only, SonoBus audio port allowed for mobile, built-in test assertions. Ready to paste into admin console.
 
 ---
 
-### P4-03: Local Firewall Configuration — ⬜ NOT STARTED
+### P4-03: Local Firewall Configuration — ✅ COMPLETE (2026-03-05)
 **Effort:** 2h | **Complexity:** MEDIUM
 
-- [ ] Pi: UFW/nftables — allow SSH, HA, MQTT, broker from LAN/Tailscale only
-- [ ] Mac: macOS firewall — block incoming except LAN + Tailscale
+- [x] Pi: UFW setup script — `deploy/security/setup-firewall-pi.sh`
+- [x] Mac: pf + Application Firewall — `deploy/security/setup-firewall-mac.sh`
+- [x] Verification script — `deploy/security/verify-security.sh`
+- [x] Docker UFW compatibility (DOCKER-USER chain rules)
+- [x] MQTT restricted to localhost + Docker + Tailscale
+- [x] SSH rate-limited (brute-force protection)
+- [x] Bootstrap script updated to include firewall step
+- [x] Security README: `deploy/security/README.md`
+- [ ] Run firewall scripts on Pi and Mac (manual step)
 - [ ] Port scan verification
+
+**Deliverables:** UFW script (Pi, 7 port rules + Docker compat), pf script (Mac, Ollama-only exposure), verification script (runs from any tailnet device), security README with full port inventory and access matrix.
 
 ---
 

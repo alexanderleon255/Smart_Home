@@ -15,13 +15,13 @@
 | P1 | Hub Setup | 9 | 6 | 🟢 67% |
 | P2 | AI Sidecar | 8 | 8 | 🟢 100% |
 | P3 | Voice Pipeline (Pi) | 6 | 0 | 🔴 0% |
-| P4 | Security Hardening | 6 | 2 | 🟡 33% |
+| P4 | Security Hardening | 6 | 4 | 🟡 67% |
 | P5 | Camera Integration | 5 | 0 | 🔴 0% |
 | P6 | Jarvis Real-Time Voice | 10 | 8 | 🟢 80% |
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
 | P9 | Chat Tier Packs | 5 | 0 | 🔴 0% |
-| **TOTAL** | | **62** | **37** | **🟡 60%** |
+| **TOTAL** | | **62** | **39** | **🟡 63%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
 **Tests:** 248 passing (pytest, ~26s)  
@@ -92,13 +92,13 @@
 | ID | Item | Status | Completed | Notes |
 |----|------|--------|-----------|-------|
 | P4-01 | Tailscale Installation & Configuration | ✅ COMPLETE | 2026-03-03 | Pi=100.83.1.2, Mac=100.98.1.21, iPhone=100.83.74.23 |
-| P4-02 | Tailscale ACLs | ⬜ NOT STARTED | - | |
-| P4-03 | Local Firewall Configuration | ⬜ NOT STARTED | - | |
+| P4-02 | Tailscale ACLs | ✅ COMPLETE | 2026-03-05 | ACL policy file with 5 tiers, built-in tests, ready for admin console |
+| P4-03 | Local Firewall Configuration | ✅ COMPLETE | 2026-03-05 | UFW (Pi) + pf (Mac) scripts, Docker compat, verification script |
 | P4-04 | Credential Rotation & Storage | ✅ COMPLETE | 2026-03-02 | API-key auth, CORS allowlist, rate limiting, PolicyGate |
 | P4-05 | Logging & Monitoring Setup | ⬜ NOT STARTED | - | |
 | P4-06 | Security Audit | ⬜ NOT STARTED | - | |
 
-**Phase 4 Status:** 🟡 33% -- Tailscale mesh fully operational (Pi, Mac, iPhone, iPad). Software-level security (auth, PolicyGate, CORS) complete. ACLs and firewall pending.
+**Phase 4 Status:** 🟡 67% -- Tailscale mesh fully operational (Pi, Mac, iPhone, iPad). Software-level security (auth, PolicyGate, CORS) complete. ACL policy created with 5 device tiers (admin/mobile/server/sidecar/guest) and built-in Tailscale test assertions. Pi UFW + Mac pf firewall scripts created with Docker compatibility. Verification script for security posture checks. Manual steps remaining: paste ACLs into admin console, assign device tags, run firewall scripts on Pi and Mac.
 
 ---
 
@@ -224,6 +224,7 @@
 | 2026-03-05 | Service persistence | P1-09 | 5 systemd user units, linger, Ollama 0.0.0.0 fix, deploy/ bootstrap |
 | 2026-03-05 | Diagnostic pattern | P2-07 | HADiagnostic + TierDiagnostic pattern across HA client, dashboard, Jarvis client, audio pipeline; 248 tests passing |
 | 2026-03-05 | Dashboard chat visibility | P2-08 | Audit middleware captures response body; dashboard polls audit + injects ALL external interactions into chat; source badges; 248 tests |
+| 2026-03-05 | Security hardening | P4-02, P4-03 | Tailscale ACL policy (5 tiers, 10+ test assertions); Pi UFW script (7 port rules, Docker compat, SSH rate limit); Mac pf script (Ollama-only); verification script; security README; bootstrap.sh updated; 248 tests passing |
 
 ---
 

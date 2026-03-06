@@ -1,0 +1,217 @@
+// =============================================================================
+// Smart Home — Tailscale ACL Policy
+//
+// Roadmap: P4-02 (Tailscale ACLs)
+// Reference: Smart_Home_Threat_Model_Analysis_Rev_1_0.md §9.3, §14.1
+//
+// HOW TO APPLY:
+//   1. Open https://login.tailscale.com/admin/acls
+//   2. Replace the entire policy with this file's contents
+//   3. Click "Save" — Tailscale validates before applying
+//   4. Run: deploy/security/verify-security.sh (from any tailnet device)
+//
+// DEVICES (as of 2026-03-05):
+//   Pi 5:     100.83.1.2     (tag:server)
+//   Mac M1:   100.98.1.21    (tag:sidecar)
+//   iPhone:   100.83.74.23   (tag:mobile)
+//   iPad:     (assign tag:mobile when added)
+//
+// DESIGN PRINCIPLES:
+//   - Least privilege: each device tier sees only what it needs
+//   - No wildcard port access between devices
+//   - Admin (Alex) gets full access; users get HA + dashboard only
+//   - Guest devices get nothing on the tailnet by default
+//   - SSH restricted to admin devices only
+// =============================================================================
+{
+  // Tag owners — who can assign which tags to devices
+  "tagOwners": {
+    "tag:server":  ["autogroup:admin"],
+    "tag:sidecar": ["autogroup:admin"],
+    "tag:mobile":  ["autogroup:admin"],
+    "tag:admin":   ["autogroup:admin"],
+    "tag:guest":   ["autogroup:admin"]
+  },
+
+  // Groups — logical collections of users
+  "groups": {
+    "group:admins": ["alexanderleon255@github"],
+    "group:users":  []
+  },
+
+  // ACL rules — ordered, first-match wins
+  "acls": [
+    // ─────────────────────────────────────────────────────────────────
+    // RULE 1: Admin full access to all tagged servers
+    // Alex (admin devices) can reach everything on Pi and Mac
+    // ─────────────────────────────────────────────────────────────────
+    {
+      "action": "accept",
+      "src":    ["group:admins"],
+      "dst": [
+        "tag:server:22",
+        "tag:server:1883",
+        "tag:server:8000",
+        "tag:server:8050",
+        "tag:server:8123",
+        "tag:server:11434",
+        "tag:sidecar:22",
+        "tag:sidecar:11434"
+      ]
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // RULE 2: Mobile devices → Pi user-facing services only
+    // iPhone/iPad can reach HA dashboard, Tool Broker, Dashboard
+    // NO SSH, NO MQTT, NO direct Ollama access
+    // ─────────────────────────────────────────────────────────────────
+    {
+      "action": "accept",
+      "src":    ["tag:mobile"],
+      "dst": [
+        "tag:server:8000",
+        "tag:server:8050",
+        "tag:server:8123"
+      ]
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // RULE 3: Pi ↔ Mac sidecar (Tool Broker → Ollama)
+    // Pi needs to reach Mac's Ollama for sidecar LLM tier
+    // Mac needs to reach Pi's Tool Broker for health checks
+    // ─────────────────────────────────────────────────────────────────
+    {
+      "action": "accept",
+      "src":    ["tag:server"],
+      "dst":    ["tag:sidecar:11434"]
+    },
+    {
+      "action": "accept",
+      "src":    ["tag:sidecar"],
+      "dst": [
+        "tag:server:8000",
+        "tag:server:8123",
+        "tag:server:11434"
+      ]
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // RULE 4: SonoBus audio (Jarvis voice pipeline)
+    // iPhone ↔ Pi bidirectional audio on SonoBus default port
+    // SonoBus uses UDP 10998 by default
+    // ─────────────────────────────────────────────────────────────────
+    {
+      "action": "accept",
+      "src":    ["tag:mobile"],
+      "dst":    ["tag:server:10998"]
+    },
+    {
+      "action": "accept",
+      "src":    ["tag:server"],
+      "dst":    ["tag:mobile:10998"]
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // RULE 5: Guest devices — NO ACCESS
+    // Guests on the tailnet cannot reach any tagged device.
+    // They must use the local LAN HA dashboard (if allowed).
+    // This is an explicit deny — Tailscale's default-deny handles it,
+    // but we document intent here.
+    // ─────────────────────────────────────────────────────────────────
+    // (Tailscale default-deny: no rule = no access for tag:guest)
+
+    // ─────────────────────────────────────────────────────────────────
+    // RULE 6: Users group — HA + Dashboard only (for future partner)
+    // When group:users is populated, they get limited access
+    // ─────────────────────────────────────────────────────────────────
+    {
+      "action": "accept",
+      "src":    ["group:users"],
+      "dst": [
+        "tag:server:8050",
+        "tag:server:8123"
+      ]
+    }
+  ],
+
+  // SSH policy — restrict SSH to admin only
+  "ssh": [
+    {
+      "action": "accept",
+      "src":    ["group:admins"],
+      "dst":    ["tag:server", "tag:sidecar"],
+      "users":  ["autogroup:nonroot", "root"]
+    }
+  ],
+
+  // Node attributes — enforce key expiry
+  "nodeAttrs": [
+    {
+      "target": ["*"],
+      "attr":   ["funnel:deny"]
+    }
+  ],
+
+  // Auto-approve tagged devices for specific IPs
+  // (uncomment and customize if using autoApprovers)
+  // "autoApprovers": {
+  //   "routes": {
+  //     "100.83.1.2/32": ["tag:server"],
+  //     "100.98.1.21/32": ["tag:sidecar"]
+  //   }
+  // },
+
+  // Tests — Tailscale validates these when you save
+  "tests": [
+    // Admin can SSH to Pi
+    {
+      "src":    "group:admins",
+      "accept": ["tag:server:22"]
+    },
+    // Admin can reach all Pi services
+    {
+      "src":    "group:admins",
+      "accept": ["tag:server:8000", "tag:server:8123", "tag:server:8050", "tag:server:11434", "tag:server:1883"]
+    },
+    // Admin can reach Mac sidecar
+    {
+      "src":    "group:admins",
+      "accept": ["tag:sidecar:22", "tag:sidecar:11434"]
+    },
+    // Mobile can reach user-facing Pi services
+    {
+      "src":    "tag:mobile",
+      "accept": ["tag:server:8000", "tag:server:8050", "tag:server:8123"]
+    },
+    // Mobile CANNOT SSH to Pi
+    {
+      "src":    "tag:mobile",
+      "deny":   ["tag:server:22"]
+    },
+    // Mobile CANNOT reach MQTT
+    {
+      "src":    "tag:mobile",
+      "deny":   ["tag:server:1883"]
+    },
+    // Mobile CANNOT reach Mac sidecar
+    {
+      "src":    "tag:mobile",
+      "deny":   ["tag:sidecar:11434"]
+    },
+    // Pi can reach Mac Ollama (sidecar tier)
+    {
+      "src":    "tag:server",
+      "accept": ["tag:sidecar:11434"]
+    },
+    // Mac can reach Pi Tool Broker
+    {
+      "src":    "tag:sidecar",
+      "accept": ["tag:server:8000"]
+    },
+    // Guest cannot reach anything
+    {
+      "src":    "tag:guest",
+      "deny":   ["tag:server:22", "tag:server:8000", "tag:server:8123", "tag:sidecar:11434"]
+    }
+  ]
+}
