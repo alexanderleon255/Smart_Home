@@ -2,7 +2,8 @@
 
 **Owner:** Alex  
 **Created:** 2026-03-02  
-**Status:** DRAFT - Placeholder
+**Last Updated:** 2026-03-07 (Rev 2.0 — Corrected for DEC-009/010/011/014: Pi-primary architecture)  
+**Status:** ACTIVE
 
 ---
 
@@ -10,12 +11,376 @@
 
 This document describes operational procedures for maintaining the Smart Home system.
 
-| System | Location | Access |
-|--------|----------|--------|
-| Home Assistant | Pi 5 | `http://homeassistant.local:8123` |
-| Ollama | Mac M1 | `http://localhost:11434` |
-| Tool Broker | Mac M1 | `http://localhost:8000` |
-| Zigbee2MQTT | Pi 5 | `http://homeassistant.local:8080` |
+| System | Host | Access |
+|--------|------|--------|
+| Home Assistant | Pi 5 (Docker) | `http://100.83.1.2:8123` or `homeassistant.local:8123` |
+| Tool Broker | Pi 5 (uvicorn) | `http://100.83.1.2:8000` |
+| Ollama (local) | Pi 5 | `http://100.83.1.2:11434` (qwen2.5:1.5b) |
+| Ollama (sidecar) | Mac M1 | `http://100.98.1.21:11434` (llama3.1:8b) |
+| Dashboard | Pi 5 (Dash) | `http://100.83.1.2:8050` |
+| Mosquitto MQTT | Pi 5 (Docker) | `100.83.1.2:1883` |
+| PipeWire | Pi 5 | System service |
+| Tailscale | Pi + Mac + iPhone | Mesh VPN (no public ports) |
+
+> **Architecture note (DEC-010/014):** The Pi runs Debian Bookworm (not HA OS) and hosts
+> Tool Broker, local Ollama, Dashboard, and audio pipeline. The Mac is a sidecar
+> for complex LLM queries only. All services persist via systemd user units.
+
+---
+
+## 2. Raspberry Pi Hub Operations
+
+### 2.1 SSH Access
+
+```bash
+# Via Tailscale (preferred — works from anywhere on mesh)
+ssh pi@100.83.1.2
+
+# Via local network
+ssh pi@homeassistant.local
+```
+
+### 2.2 Service Management (systemd user units)
+
+All Smart Home services run as systemd user units under the `pi` user, with linger enabled for boot persistence.
+
+```bash
+# Check status of all services
+systemctl --user status ollama tool-broker dashboard jarvis-audio-devices sonobus
+
+# Restart a specific service
+systemctl --user restart tool-broker
+
+# View logs
+journalctl --user -u tool-broker -f
+
+# List all Smart Home units
+systemctl --user list-units 'ollama*' 'tool-broker*' 'dashboard*' 'jarvis*' 'sonobus*'
+```
+
+| Unit | Description | Port |
+|------|-------------|------|
+| `ollama.service` | Local Ollama (qwen2.5:1.5b) | :11434 |
+| `tool-broker.service` | FastAPI Tool Broker (uvicorn) | :8000 |
+| `dashboard.service` | Dash management app | :8050 |
+| `jarvis-audio-devices.service` | PipeWire virtual sink/source | — |
+| `sonobus.service` | SonoBus headless audio bridge | — |
+
+Unit files live in `deploy/systemd/`, symlinked to `~/.config/systemd/user/`.
+
+### 2.3 Home Assistant (Docker)
+
+HA runs as a Docker container, NOT HA OS. There is no `ha` CLI — use the REST API or web UI.
+
+```bash
+# Check HA container
+docker ps --filter name=homeassistant
+
+# View HA logs
+docker logs homeassistant --tail 100 -f
+
+# Restart HA
+docker restart homeassistant
+
+# HA config is bind-mounted from ../ha_config (relative to docker/ dir)
+```
+
+### 2.4 Health Check
+
+```bash
+# Quick health check — all services
+curl -s http://localhost:8000/v1/health | python3 -m json.tool
+
+# Individual checks
+curl -s http://localhost:11434/api/tags     # Local Ollama
+curl -s http://localhost:8123/api/           # HA (needs auth header)
+curl -s http://localhost:8050/               # Dashboard
+```
+
+### 2.5 Reboot Procedures
+
+```bash
+# Graceful reboot (services auto-restart via systemd)
+sudo reboot
+
+# If a single service hangs
+systemctl --user restart tool-broker
+```
+
+### 2.6 Log Access
+
+```bash
+# Tool Broker logs (including audit)
+journalctl --user -u tool-broker --since "1 hour ago"
+
+# HA logs
+docker logs homeassistant --tail 200
+
+# All Smart Home services
+journalctl --user --since "1 hour ago"
+```
+
+---
+
+## 3. Mac M1 Sidecar Operations
+
+The Mac is a **sidecar only** — it hosts the llama3.1:8b model for complex queries routed via Tailscale. The Tool Broker does NOT run on the Mac.
+
+### 3.1 Keep-Alive Configuration
+
+**Problem:** Mac sleeps → sidecar LLM tier becomes unavailable (Tool Broker falls back to local qwen2.5:1.5b on Pi).
+
+```bash
+# Prevent sleep while on power
+sudo pmset -c sleep 0
+sudo pmset -c displaysleep 0
+
+# Or use caffeinate for specific duration
+caffeinate -d -i -s -u &
+```
+
+### 3.2 Ollama Management
+
+```bash
+# Check Ollama
+curl -s http://localhost:11434/api/tags
+
+# Restart
+brew services restart ollama
+
+# Ollama must listen on 0.0.0.0 for Tailscale access
+# Set OLLAMA_HOST=0.0.0.0 in launch config
+```
+
+### 3.3 Sidecar Down — Impact
+
+When the Mac is offline/asleep:
+- Tool Broker health endpoint shows `"sidecar": "unreachable"`
+- Complex queries get routed to local tier (lower quality but functional)
+- All automations, dashboard, voice pipeline continue normally on Pi
+- **No user action required** — the system is designed for graceful degradation
+
+---
+
+## 4. Backup Procedures
+
+### 4.1 Automated Backup Script
+
+```bash
+# Run the backup script (on Pi)
+~/Smart_Home/deploy/backup.sh
+
+# What it backs up:
+# - HA config (bind mount)
+# - AI_CONTEXT/ (tar)
+# - Docker volumes (mosquitto, pihole)
+# - deploy/ configs
+# - Audit logs
+# - 30-day retention with automatic pruning
+
+# Schedule via cron (daily at 2 AM):
+# 0 2 * * * /home/pi/Smart_Home/deploy/backup.sh >> /var/log/smart_home_backup.log 2>&1
+```
+
+### 4.2 Manual HA Backup
+
+HA is Docker-based, so backups are file-based:
+
+```bash
+# Stop HA, copy config, restart
+docker stop homeassistant
+tar -czf ha_config_$(date +%Y%m%d).tar.gz ../ha_config/
+docker start homeassistant
+```
+
+### 4.3 AI Context Backup
+
+```bash
+tar -czf smart_home_ai_context_$(date +%Y%m%d).tar.gz AI_CONTEXT/
+```
+
+### 4.4 Restore Procedure
+
+```bash
+# Restore HA config
+docker stop homeassistant
+tar -xzf ha_config_YYYYMMDD.tar.gz -C ../
+docker start homeassistant
+
+# Restore AI Context
+tar -xzf smart_home_ai_context_YYYYMMDD.tar.gz -C ~/Smart_Home/
+```
+
+---
+
+## 5. Update Procedures
+
+### 5.1 Home Assistant Updates
+
+```bash
+# Pull latest HA Docker image
+docker pull ghcr.io/home-assistant/home-assistant:stable
+
+# Recreate container (docker-compose)
+cd ~/Smart_Home/docker && docker compose up -d
+```
+
+### 5.2 Ollama Updates (Pi)
+
+```bash
+# Ollama installed via install script on Pi
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Re-pull model after update
+ollama pull qwen2.5:1.5b
+```
+
+### 5.3 Ollama Updates (Mac)
+
+```bash
+brew upgrade ollama
+brew services restart ollama
+```
+
+### 5.4 Tool Broker / Codebase Updates
+
+```bash
+cd ~/Smart_Home
+git pull
+.venv/bin/pip install -r requirements.txt
+systemctl --user restart tool-broker dashboard
+```
+
+---
+
+## 6. Monitoring & Alerts
+
+### 6.1 What to Monitor
+
+| Component | Check | Method |
+|-----------|-------|--------|
+| Tool Broker | Health endpoint | `curl localhost:8000/v1/health` |
+| HA | Container running | `docker ps` |
+| Local Ollama | API responsive | `curl localhost:11434/api/tags` |
+| Sidecar Ollama | Reachable via Tailscale | `curl 100.98.1.21:11434/api/tags` |
+| Disk Usage | < 80% | `df -h /` |
+| CPU Temp | < 70°C | `cat /sys/class/thermal/thermal_zone0/temp` |
+
+### 6.2 Security Monitor
+
+```bash
+# Run security monitor (deploy/security/security-monitor.sh)
+~/Smart_Home/deploy/security/security-monitor.sh
+
+# Checks: failed auth attempts, new Tailscale peers, automation errors
+```
+
+### 6.3 Security Audit
+
+```bash
+# Generate timestamped security audit report
+~/Smart_Home/deploy/security/run-security-audit.sh
+# Reports saved to AI_CONTEXT/SESSION_ARTIFACTS/SECURITY_AUDITS/
+```
+
+---
+
+## 7. Incident Response
+
+### 7.1 Common Issues
+
+#### Tool Broker Not Responding
+1. Check: `systemctl --user status tool-broker`
+2. View logs: `journalctl --user -u tool-broker --since "10 min ago"`
+3. Restart: `systemctl --user restart tool-broker`
+4. Verify: `curl localhost:8000/v1/health`
+
+#### LLM Not Responding (Local)
+1. Check: `systemctl --user status ollama`
+2. Test: `curl localhost:11434/api/tags`
+3. Restart: `systemctl --user restart ollama`
+
+#### LLM Not Responding (Sidecar)
+1. Check Mac is awake and on Tailscale
+2. Test from Pi: `curl 100.98.1.21:11434/api/tags`
+3. On Mac: `brew services restart ollama`
+4. **Note:** Local tier continues working — this is a degraded, not failed, state
+
+#### HA Not Responding
+1. Check: `docker ps --filter name=homeassistant`
+2. Logs: `docker logs homeassistant --tail 50`
+3. Restart: `docker restart homeassistant`
+
+#### Audio Pipeline Issues
+1. Check PipeWire: `pw-cli info all | head`
+2. Check virtual devices: `pactl list sources short` / `pactl list sinks short`
+3. Restart audio: `systemctl --user restart jarvis-audio-devices sonobus`
+4. Re-wire SonoBus: `~/Smart_Home/jarvis_audio/scripts/wire_sonobus.sh`
+
+### 7.2 Full System Recovery
+
+1. SSH into Pi (or connect keyboard/monitor)
+2. `systemctl --user restart ollama tool-broker dashboard jarvis-audio-devices sonobus`
+3. `docker restart homeassistant`
+4. Verify: `curl localhost:8000/v1/health`
+
+### 7.3 Emergency Fallback
+
+If everything fails:
+- HA web UI still works at :8123 for manual device control
+- Physical switches still work
+- HA automations run independently of Tool Broker / LLM
+
+---
+
+## 8. Maintenance Schedule
+
+### Daily (automated)
+- Backup runs at 2 AM (`deploy/backup.sh` via cron)
+- Audit log rotation (30-day retention, built into audit_log.py)
+
+### Weekly
+- Review security monitor output
+- Check disk usage
+- Verify sidecar reachability
+
+### Monthly
+- Check for HA Docker image updates
+- Check for Ollama updates (Pi + Mac)
+- Review and prune old backups beyond 30-day window
+- Run `pytest tests/ -q` after any updates
+
+### Quarterly
+- Run formal security audit (`run-security-audit.sh`)
+- Review Tailscale ACLs
+- Test backup restore procedure
+
+---
+
+## 9. Quick Reference
+
+| Resource | URL/Command |
+|----------|-------------|
+| HA Web UI | `http://100.83.1.2:8123` |
+| Dashboard | `http://100.83.1.2:8050` |
+| Tool Broker Health | `curl http://100.83.1.2:8000/v1/health` |
+| Pi SSH | `ssh pi@100.83.1.2` |
+| Run tests | `.venv/bin/python -m pytest tests/ -q` |
+| Backup | `~/Smart_Home/deploy/backup.sh` |
+| Security audit | `~/Smart_Home/deploy/security/run-security-audit.sh` |
+
+---
+
+## 10. Change Log
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-03-02 | Initial creation (Mac-primary architecture) | Alex |
+| 2026-03-07 | Rev 2.0 — Rewritten for Pi-primary architecture (DEC-009/010/011/014). Mac is sidecar only. systemd services, Docker HA, deploy/backup.sh, security tools. | AI |
+
+---
+
+**END OF DOCUMENT**
 
 ---
 

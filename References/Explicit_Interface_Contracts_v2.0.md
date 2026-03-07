@@ -1,16 +1,17 @@
-# Explicit Interface Contracts v1.0
+# Explicit Interface Contracts v2.0
 
-Generated: 2026-03-02 12:36
+Updated: 2026-03-07 (DEC-008 conversation-first format)  
+Original: 2026-03-02 12:36
 
-Authoritative contract definitions for the Hybrid HA + Llama
-architecture.
+Authoritative contract definitions for the Smart Home
+architecture (Pi-primary, Mac-sidecar).
 
 This document defines strict boundaries between:
 
-1.  LLM (Ollama / Llama)
-2.  Tool Broker (Local Orchestrator)
-3.  Home Assistant (Execution Engine)
-4.  Voice Pipeline (STT/TTS)
+1.  LLM (Ollama — tiered: local qwen2.5:1.5b + sidecar llama3.1:8b)
+2.  Tool Broker (FastAPI on Pi)
+3.  Home Assistant (Docker on Pi)
+4.  Voice Pipeline (Jarvis — whisper.cpp + Piper TTS on Pi)
 5.  Memory Layer
 6.  Error Handling + Logging
 7.  Security Constraints
@@ -21,87 +22,122 @@ These contracts are mandatory. No component may bypass them.
 
 # 1. LLM → Tool Broker Contract
 
-## 1.1 Allowed Output Modes
+## 1.1 Response Format (DEC-008: Conversation-First)
 
-The LLM may output one of the following:
+Every LLM response is a **ConversationalResponse** containing:
 
-A)  Natural language response ONLY
-B)  Mixed conversational text WITH tool call JSON (conversation-first, DEC-008)
-C)  Clarification request
+A)  `text` — Natural language (ALWAYS present, even with tool calls)  
+B)  `tool_calls` — Optional array of embedded tool calls (empty array if pure conversation)
 
-**DEC-008 Conversation-First Format:** The LLM MUST provide conversational text in the `text` field AND MAY include structured tool calls in the `tool_calls` array when actions are needed. The conversational text should acknowledge the user's request and explain what action is being taken.
+> **DEC-008 supersedes the v1.0 rule of "no mixed freeform + tool JSON."**
+> The LLM MUST always include natural language text alongside any tool calls.
 
-Example:
-```json
+``` json
 {
   "text": "I'll turn off the living room light for you.",
-  "tool_calls": [{
-    "tool_name": "ha_service_call",
-    "arguments": {
-      "domain": "light",
-      "service": "turn_off",
-      "entity_id": "light.living_room"
+  "tool_calls": [
+    {
+      "tool_name": "ha_service_call",
+      "arguments": {
+        "domain": "light",
+        "service": "turn_off",
+        "entity_id": "light.living_room"
+      },
+      "confidence": 0.92,
+      "requires_confirmation": false
     }
-  }]
+  ]
+}
+```
+
+Pure conversation (no actions):
+
+``` json
+{
+  "text": "The living room light is currently on at 80% brightness.",
+  "tool_calls": []
 }
 ```
 
 ------------------------------------------------------------------------
 
-## 1.2 Tool Call Schema (STRICT)
+## 1.2 Embedded Tool Call Schema (STRICT)
 
-All tool calls must conform to:
+Each entry in `tool_calls` must conform to:
 
 ``` json
 {
-  "type": "tool_call",
   "tool_name": "string",
-  "arguments": {
-    "key": "value"
-  },
-  "confidence": 0.0
+  "arguments": { "key": "value" },
+  "confidence": 0.0,
+  "requires_confirmation": false
 }
 ```
 
 Constraints:
 
--   tool_name must match registered tool exactly
--   arguments must match declared schema
--   confidence must be float 0.0--1.0
+-   tool_name must match a registered tool exactly (ha_service_call, ha_get_state, ha_list_entities)
+-   arguments must match the tool's declared schema
+-   confidence must be float 0.0–1.0
+-   requires_confirmation is true for high-risk domains (lock, alarm_control_panel, cover)
 
-If schema invalid → broker rejects request.
+If schema is invalid → broker rejects and returns error response.
 
 ------------------------------------------------------------------------
 
-## 1.3 Example Tool Calls
+## 1.3 Registered Tools (as of 2026-03-07)
 
-Turn off light:
+| Tool | Description |
+|------|-------------|
+| `ha_service_call` | Call an HA service (light, switch, lock, climate, etc.) |
+| `ha_get_state` | Get current state of an HA entity |
+| `ha_list_entities` | List available HA entities, optionally filtered by domain |
+
+Deferred tools (not yet implemented):
+- `web_search` — pending DEC-P03 (SearXNG vs DuckDuckGo)
+- `create_reminder` — pending calendar backend selection
+
+------------------------------------------------------------------------
+
+## 1.4 Example: High-Risk Action (Requires Confirmation)
 
 ``` json
 {
-  "type": "tool_call",
-  "tool_name": "ha_service_call",
-  "arguments": {
-    "domain": "light",
-    "service": "turn_off",
-    "entity_id": "light.living_room"
-  },
-  "confidence": 0.92
+  "text": "I can lock the front door for you. Please confirm.",
+  "tool_calls": [
+    {
+      "tool_name": "ha_service_call",
+      "arguments": {
+        "domain": "lock",
+        "service": "lock",
+        "entity_id": "lock.front_door"
+      },
+      "confidence": 0.88,
+      "requires_confirmation": true
+    }
+  ]
 }
 ```
 
-Create reminder:
+Broker holds execution until user confirms via PolicyGate.
+
+------------------------------------------------------------------------
+
+## 1.5 Example: State Query
 
 ``` json
 {
-  "type": "tool_call",
-  "tool_name": "create_reminder",
-  "arguments": {
-    "title": "Replace air filter",
-    "due": "2026-03-15T09:00:00",
-    "priority": "normal"
-  },
-  "confidence": 0.87
+  "text": "Let me check the temperature for you.",
+  "tool_calls": [
+    {
+      "tool_name": "ha_get_state",
+      "arguments": {
+        "entity_id": "sensor.temperature"
+      },
+      "confidence": 0.95,
+      "requires_confirmation": false
+    }
+  ]
 }
 ```
 
