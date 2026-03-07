@@ -1,6 +1,6 @@
 # Smart Home — Current State
 
-**Last Updated:** 2026-03-06 (Rev 8.0 — P1-08 backup; P3 SUPERSEDED; P9 chat tier packs 100%; Bug #5 httpx pooling; Bug #7 datetime.utcnow; 87%)  
+**Last Updated:** 2026-03-07 (Rev 9.0 — P10 Software Expansion added; vision Rev 3.0; roadmap Rev 6.0)  
 **Purpose:** What is installed, current phase, blockers, next actions  
 **Authority:** Vision/specs → Roadmap → Progress Tracker → **This Document**  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
@@ -73,11 +73,11 @@
 
 ## Current Phase
 
-**Active work:** P6-10 live voice testing (last non-HW-blocked item)  
-**Overall progress:** 54/62 items complete (87%)  
+**Active work:** P6-10 live voice testing (last non-HW-blocked item from P1-P9); P10 Software Expansion planned (8 items)  
+**Overall progress:** 54/70 items complete (77%)  
 **Phases 100% done:** P2 (AI Sidecar), P4 (Security), P7 (Secretary), P8 (Advanced AI), P9 (Chat Tier Packs)  
 **Phases >50% done:** P1 (78%), P6 (90% — only live testing remains)  
-**Phases not active:** P3 (SUPERSEDED by P6), P5 (camera hardware not acquired)  
+**Phases not active:** P3 (SUPERSEDED by P6), P5 (camera hardware not acquired), P10 (planned, 0% — see roadmap Rev 6.0)  
 **Main blockers:** Zigbee USB dongle (P1-04), camera hardware (P5), iPhone SonoBus peer (P6-10)  
 **Total tests:** 249 passing, 0 warnings (~24s)  
 **Total LOC:** 12,968 (9,582 source + 3,386 test)
@@ -135,6 +135,7 @@
 | P7 Secretary | 100% | start_streaming() + process_audio_file() both wired to real whisper.cpp |
 | P8 Advanced AI | 100% | Vector store UUID4 IDs; context_builder search() call fixed |
 | P9 Chat Tier Packs | 100% | Generator + verifier + 5 output files in GENERATED_CHAT/ |
+| P10 Software Expansion | 0% | 8 items: explainability, memory hygiene, house modes, planner, derived states, anomaly detection, simulation, integrations |
 
 ---
 
@@ -155,16 +156,26 @@
 2. Apply Tailscale ACLs + device tags in admin console (manual ops)
 3. Upload chat tier packs to ChatGPT Projects (manual ops)
 
-### Tier 2: Harden (reliability)
-4. `POST /v1/process/stream` SSE endpoint
-5. Async `tool_broker_client.py`
-6. Complexity classifier tests
-7. Periodic health watchdog with notifications
+### Tier 2: Software Expansion (P10 — ordered by ROI)
+4. P10-01: Explainability panel + unified event timeline
+5. P10-02: Memory hygiene + actionable context assembly
+6. P10-03: House-mode state machine
+7. P10-04: Intent planner + action planning
+8. P10-05: Derived-state engine
+9. P10-06: Anomaly detection + recommendations
+10. P10-07: Dry-run / simulation mode
+11. P10-08: Brokered external integrations
 
-### Tier 3: Hardware-blocked
-8. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
-9. P5 Camera integration (awaiting DEC-005 hardware decision)
-10. P3 HA Voice Pipeline (low priority — superseded by P6)
+### Tier 3: Harden (reliability)
+12. `POST /v1/process/stream` SSE endpoint
+13. Async `tool_broker_client.py`
+14. Complexity classifier tests
+15. Periodic health watchdog with notifications
+
+### Tier 4: Hardware-blocked
+16. P1-04 Zigbee coordinator (awaiting DEC-001 dongle decision)
+17. P5 Camera integration (awaiting DEC-005 hardware decision)
+18. P3 HA Voice Pipeline (low priority — superseded by P6)
 
 ---
 

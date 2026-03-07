@@ -2,8 +2,8 @@
 
 **Owner:** Alex  
 **Created:** 2026-03-02  
-**Updated:** 2026-03-02  
-**Status:** Authoritative Vision (Rev 2.6)
+**Updated:** 2026-03-07  
+**Status:** Authoritative Vision (Rev 3.0 — P10 Software Expansion Vision; §3 architecture corrected for Pi-primary; §14-15 updated)
 
 ---
 
@@ -52,19 +52,21 @@ The system prioritizes security, privacy, and maintainability over cloud conveni
          ▼                       ▼                       ▼
 ┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
 │  RASPBERRY PI 5     │ │  MACBOOK AIR M1     │ │  iPHONE             │
-│  (Automation Hub)   │ │  (AI Sidecar)       │ │  (Audio Relay)      │
+│  (Primary Hub)      │ │  (AI Sidecar)       │ │  (Audio Relay)      │
 ├─────────────────────┤ ├─────────────────────┤ ├─────────────────────┤
 │ • Debian Bookworm   │ │ • Ollama runtime    │ │ • AirPods paired    │
-│ • Tool Broker API   │ │ • Llama 3.1 8B      │ │ • SonoBus app       │
-│ • MQTT Broker       │ │ • whisper.cpp (STT) │ │ • HA Companion app  │
-│ • Zigbee/Z-Wave     │ │ • Piper TTS         │ │ • Push notifications│
-│ • Local containers  │ │ • PipeWire virtual  │ └─────────┬───────────┘
-└─────────┬───────────┘ │   audio devices     │           │
-          │             │ • SonoBus bridge    │◄──────────┘
-          │             │ • Session archival  │  (bidirectional audio)
-          │             └─────────┬───────────┘
-          │                       │
-          │◄──────────────────────┘ (Tool calls via HTTP)
+│ • HA Core (Docker)  │ │ • Llama 3.1 8B      │ │ • SonoBus app       │
+│ • Tool Broker API   │ │   (complex queries) │ │ • HA Companion app  │
+│ • Ollama (local)    │ └─────────────────────┘ │ • Push notifications│
+│ • MQTT Broker       │                         └─────────┬───────────┘
+│ • Zigbee/Z-Wave     │                                   │
+│ • whisper.cpp (STT) │◄──────────────────────────────────┘
+│ • Piper TTS         │  (bidirectional audio via SonoBus)
+│ • PipeWire audio    │
+│ • SonoBus bridge    │
+│ • Dashboard (:8050) │
+│ • Session archival  │
+└─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐         ┌─────────────────────┐
@@ -77,10 +79,12 @@ The system prioritizes security, privacy, and maintainability over cloud conveni
 └─────────────────────┘
 ```
 
+> **Architecture Note (DEC-010, DEC-011, DEC-014):** The Pi is the primary hub — it runs Tool Broker, whisper.cpp, Piper TTS, PipeWire audio routing, and local Ollama (qwen2.5:1.5b). The Mac serves only as an AI sidecar hosting llama3.1:8b for complex queries. All voice, validation, and automation logic executes on the Pi.
+
 **Audio Signal Flow (Jarvis Voice):**
 ```
 USER SPEAKS:
-AirPods → iPhone → SonoBus ─────────────────────► Mac
+AirPods → iPhone → SonoBus ─────────────────────► Pi 5
                               (Tailscale tunnel)   │
                                                     ▼
                                               whisper.cpp → Ollama
@@ -90,7 +94,7 @@ AirPods ◄── iPhone ◄── SonoBus ◄───────────�
                               (return audio)
 
 RECORDING:
-PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
+PipeWire virtual sink captures both directions → ffmpeg → session_YYYYMMDD.wav
 ```
 
 ---
@@ -106,9 +110,9 @@ PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 | Storage | NVMe SSD (500GB+ recommended) |
 | Network | Gigabit Ethernet (hardwired) |
 | USB | Zigbee/Z-Wave USB dongle |
-| OS | Debian Bookworm aarch64 |
+| OS | Debian Bookworm (DEC-014) |
 
-**Role:** Deterministic automation core. Runs all time-critical automations, device integrations, and local voice processing. Does NOT run LLM inference.
+**Role:** Primary hub. Runs Home Assistant (Docker), Tool Broker, local Ollama (qwen2.5:1.5b), whisper.cpp, Piper TTS, PipeWire audio routing, SonoBus audio bridge, Dashboard, and all deterministic automations.
 
 ### 4.2 AI Sidecar: MacBook Air M1
 
@@ -118,9 +122,9 @@ PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 | RAM | 8GB unified |
 | Storage | 256GB+ SSD |
 | Network | Wi-Fi / Ethernet adapter |
-| Runtime | Ollama (LLM inference only) |
+| Runtime | Ollama (llama3.1:8b sidecar) |
 
-**Role:** Intelligent processing layer. Handles natural language conversation, reasoning, and complex Q&A via Ollama. When device control or actions are needed, the LLM includes structured tool calls alongside its conversational response. The Tool Broker (running on Pi) validates and executes any tool calls while passing the conversational text through to the voice loop or UI.
+**Role:** AI sidecar for complex queries only. The Pi routes complex questions to the Mac's llama3.1:8b via Tailscale when the local qwen2.5:1.5b model lacks sufficient reasoning capability. Tool Broker runs on the Pi (DEC-010), not on the Mac.
 
 ### 4.3 Client Devices
 
@@ -129,11 +133,11 @@ PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 | Component | Role |
 |-----------|------|
 | AirPods | Primary voice I/O (non-negotiable pairing) |
-| SonoBus App | Bidirectional audio bridge to Mac |
+| SonoBus App | Bidirectional audio bridge to Pi |
 | Tailscale | Secure tunnel for remote audio |
 | Home Assistant App | Backup control, notifications |
 
-**Why iPhone is required:** AirPods cannot pair directly to Mac while maintaining phone functionality. iPhone acts as the audio relay via SonoBus, forwarding mic input to Mac and receiving TTS output back.
+**Why iPhone is required:** AirPods cannot pair directly to the Pi. iPhone acts as the audio relay via SonoBus, forwarding mic input to the Pi and receiving TTS output back.
 
 #### iPad (Dashboard Display)
 
@@ -241,9 +245,8 @@ PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 
 | Component | Purpose | Status |
 |-----------|---------|--------|
-| Home Assistant Core | Core automation engine (Docker) | Installed |
-| Debian Bookworm | Base OS (aarch64) | Installed |
-| Mosquitto | MQTT broker | Planned |
+| Home Assistant Core | Core automation engine (Docker) | **ACTIVE** |
+| Mosquitto | MQTT broker (Docker) | **ACTIVE** |
 | Zigbee2MQTT | Zigbee device bridge | Planned |
 | Z-Wave JS | Z-Wave device bridge | Planned |
 
@@ -264,28 +267,29 @@ PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 
 **Use case:** Fallback when Mac is offline; simple commands from room satellites.
 
-#### Option B: Mac-Based Jarvis (P6 — Full Featured)
+#### Option B: Pi-Based Jarvis (P6 — Full Featured)
 
 | Component | Purpose | Status |
 |-----------|---------|--------|
-| whisper.cpp **small/medium** | High-accuracy streaming STT | Planned |
-| Piper TTS | Streaming text-to-speech | Planned |
-| Ollama + Llama 3.1 | Full LLM reasoning | **ACTIVE** |
-| SonoBus | AirPods audio bridge | Planned |
+| whisper.cpp **base.en** | High-accuracy streaming STT | **ACTIVE** |
+| Piper TTS | Streaming text-to-speech | **ACTIVE** |
+| Ollama (local + sidecar) | Tiered LLM reasoning | **ACTIVE** |
+| SonoBus | AirPods audio bridge | **ACTIVE** |
+| PipeWire | Virtual audio routing | **ACTIVE** |
 
 **Features:** Streaming output, barge-in, full tool calls, conversation memory.
 
 **Use case:** Primary "Jarvis" experience via AirPods.
 
-### 5.3 AI Intelligence Layer (Mac M1)
+### 5.3 AI Intelligence Layer
 
 | Component | Purpose | Status |
 |-----------|---------|--------|
-| Ollama | LLM runtime | **ACTIVE** |
-| Llama 3.1 8B | Primary model (custom Jarvis Modelfile) | **ACTIVE** |
-| Tool Broker | HTTP API for tool calls | Planned |
+| Ollama (Pi) | Local LLM runtime (qwen2.5:1.5b) | **ACTIVE** |
+| Ollama (Mac) | Sidecar LLM runtime (llama3.1:8b) | **ACTIVE** |
+| Tool Broker | HTTP API for tool calls (on Pi :8000) | **ACTIVE** |
 
-> **Interface Contracts:** All communication between LLM, Tool Broker, and Home Assistant follows strict schemas defined in `References/Explicit_Interface_Contracts_v1.0.md`. The LLM responds conversationally (`text` field) and optionally includes structured `tool_calls` when actions are needed (DEC-008). The Broker validates and executes any tool calls; HA returns normalized responses. No component may bypass these contracts.
+> **Interface Contracts:** All communication between LLM, Tool Broker, and Home Assistant follows strict schemas defined in `References/Explicit_Interface_Contracts_v2.0.md`. The LLM responds conversationally (`text` field) and optionally includes structured `tool_calls` when actions are needed (DEC-008). The Broker validates and executes any tool calls; HA returns normalized responses. No component may bypass these contracts.
 
 ### 5.4 Real-Time Voice Architecture (Jarvis) — NEW
 
@@ -293,20 +297,20 @@ PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
 
 ```
 USER VOICE PATH:
-AirPods → iPhone → SonoBus → Mac → whisper.cpp (STT) → Ollama
+AirPods → iPhone → SonoBus → Pi → whisper.cpp (STT) → Ollama
 
 ASSISTANT VOICE PATH:
-Ollama → Piper TTS → PipeWire virtual sink → SonoBus → iPhone → AirPods
+Ollama → Piper TTS → PipeWire sink → SonoBus → iPhone → AirPods
 
 RECORDING PATH:
-PipeWire mixed stream → ffmpeg → session_YYYYMMDD.wav
+PipeWire virtual sink captures both directions → ffmpeg → session_YYYYMMDD.wav
 ```
 
 | Component | Purpose | FOSS |
 |-----------|---------|------|
-| SonoBus | Bidirectional audio bridge (iPhone↔Mac) | ✅ |
+| SonoBus | Bidirectional audio bridge (iPhone↔Pi) | ✅ |
 | Tailscale | Secure tunnel for remote audio | ✅ |
-| PipeWire | Virtual audio devices (jarvis-tts-sink, jarvis-mic-source) | ✅ |
+| PipeWire | Virtual audio routing + recording (DEC-011) | ✅ |
 | openWakeWord | Wake word detection | ✅ |
 | whisper.cpp | Live + final STT (streaming mode) | ✅ |
 | Piper TTS | Text-to-speech (OHF-Voice) | ✅ |
@@ -510,7 +514,7 @@ Constraints:
                             │
                             ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│  STEP 2: LLM CONVERSATION + ACTIONS (Mac M1)                      │
+│  STEP 2: LLM CONVERSATION + ACTIONS (Pi 5 / Mac Sidecar)              │
 │  • Tool Broker receives text                                      │
 │  • Ollama processes with system prompt + memory context            │
 │  • Output: Conversational text + optional tool calls              │
@@ -617,7 +621,7 @@ The LLM system prompt MUST include:
 
 | Component Failure | System Behavior |
 |-------------------|------------------|
-| Mac offline | HA native Assist fallback; automations continue |
+| Mac offline | Local LLM (qwen2.5:1.5b) handles queries; complex routing degrades |
 | Tailscale offline | LAN continues functioning; no remote access |
 | LLM unresponsive | No execution occurs; manual control available |
 | Internet outage | All local automation unaffected |
@@ -629,10 +633,10 @@ The LLM system prompt MUST include:
 |---------|-----------|----------|
 | SonoBus disconnect | No audio packets for 5s | Alert on iPad; retry connection |
 | AirPods not connected | SonoBus shows no input | Voice command via iPad mic |
-| iPhone offline | Tailscale peer offline | Jarvis unavailable; use Pi voice |
+| iPhone offline | Tailscale peer offline | Jarvis unavailable; use dashboard |
 | whisper.cpp crash | Process monitor | Auto-restart; log incident |
 | Piper TTS failure | No audio output | Text response to dashboard |
-| PipeWire not routing | Recording empty | Check PipeWire module state; restart if needed |
+| PipeWire routing lost | Recording empty | Alert; restart PipeWire units |
 
 ### 8.3 Secretary Pipeline Failures
 
@@ -893,30 +897,146 @@ A **session** is defined as:
 
 | Phase | Focus | Duration | Status |
 |-------|-------|----------|--------|
-| **Phase 1** | Hub Setup | 1-2 weeks | NOT STARTED |
-| **Phase 2** | AI Sidecar | 1-2 weeks | **86% COMPLETE** |
-| **Phase 3** | Voice Pipeline (Pi-based) | 1-2 weeks | NOT STARTED |
-| **Phase 4** | Security Hardening | 1 week | **17% (software done)** |
-| **Phase 5** | Camera Integration | 1-2 weeks | NOT STARTED |
-| **Phase 6** | Jarvis Real-Time Voice (Mac) | 1-2 weeks | **50% COMPLETE** |
+| **Phase 1** | Hub Setup | 1-2 weeks | **78%** (HW blockers remain) |
+| **Phase 2** | AI Sidecar | 1-2 weeks | **100% COMPLETE** |
+| **Phase 3** | Voice Pipeline (HA) | — | **SUPERSEDED** (by P6) |
+| **Phase 4** | Security Hardening | 1 week | **100% COMPLETE** |
+| **Phase 5** | Camera Integration | 1-2 weeks | 0% (HW not acquired) |
+| **Phase 6** | Jarvis Real-Time Voice (Pi) | 1-2 weeks | **90%** (live testing remains) |
 | **Phase 7** | Autonomous Secretary | 2-3 weeks | **100% COMPLETE** |
 | **Phase 8** | Advanced AI Features | Ongoing | **100% COMPLETE** |
+| **Phase 9** | Chat Tier Packs | 1 week | **100% COMPLETE** |
+| **Phase 10** | Software Expansion | Ongoing | NOT STARTED (see §15) |
 
 See `ROADMAPS/2026-03-05_smart_home_master_roadmap.md` for detailed milestones.
 
 ---
 
-## 15. Open Decisions (Pending)
+## 15. Software Expansion Vision (Phase 10)
+
+> **Source:** `References/Smart_Home_Software_Expansion_Review.md`  
+> **Principle:** The largest gains now come from software maturity — making the platform more stateful, explainable, policy-driven, and memory-informed — not from adding devices.
+
+### 15.1 Intelligence Layer Above Raw Tool Calling
+
+The current flow is: user request → LLM → tool call → execute. Phase 10 adds deliberate stages:
+
+1. **Intent classification** — categorize the request before inference
+2. **Context assembly** — build a compact state packet (device states, time, mode, occupancy, recent commands, relevant memories)
+3. **Action planning** — for multi-step requests, generate a plan before executing
+4. **Policy evaluation** — check time, mode, occupancy, and safety constraints
+5. **Execution** — validated tool calls through Tool Broker
+6. **Reasoning trace** — log why each decision was made
+
+**Capability-scoped prompts:** The same model operates under different personas depending on role — voice assistant, dashboard copilot, secretary, diagnostic/debug, automation planner. Each persona bounds the allowed tools, output style, and behavior.
+
+### 15.2 House-Mode State Machine
+
+Formal operating modes replace ad-hoc automation logic:
+
+| Mode | Behavior |
+|------|----------|
+| **Home** | Normal operation, full voice, all notifications |
+| **Away** | Climate setback, cameras armed, doors verified, notifications elevated |
+| **Sleep** | Lights off, locks verified, HVAC night profile, TTS suppressed |
+| **Focus** | Non-critical notifications suppressed, minimal interruptions |
+| **Guest** | Limited controls, no lock/alarm access, simplified interface |
+| **Travel** | Extended away mode, daily digest summaries, full camera recording |
+
+Mode transitions trigger coordinated actions across multiple subsystems. This replaces dozens of independent automations with a single state-driven abstraction. PolicyGate becomes mode-aware — what is allowed depends on the current house mode, time of day, and occupancy state.
+
+### 15.3 Derived-State Engine
+
+Computed software entities derived from raw sensor data:
+
+- **Likely sleeping** — inferred from time, motion, light state
+- **Likely cooking** — inferred from kitchen motion + appliance state
+- **Room occupancy** — inferred from motion sensors, time decay
+- **Unusual power draw** — deviation from historical baseline
+- **Device instability** — repeated failed service calls
+- **Expected arrival** — inferred from commute patterns
+
+These derived states feed into the intelligence layer and PolicyGate for smarter automation decisions.
+
+### 15.4 Memory Expansion
+
+Current 4-layer memory (ephemeral, structured, event log, vector) expands to include:
+
+| Memory Class | Examples | Storage |
+|--------------|----------|---------|
+| **User preferences** | "40% brightness for movies", "prefers 68°F" | Structured |
+| **Device quirks** | "Living room bulb slow to respond" | Structured |
+| **Recurring routines** | "Kitchen lights off ~11:30 PM most nights" | Pattern DB |
+| **Episodic memory** | "Internet unstable Tuesday evening" | Event log |
+| **Maintenance history** | "Replaced battery Jan 15" | Structured |
+
+**Memory hygiene:** All stored facts tracked with confidence, freshness, source, and decay policy. Contradiction detection prevents stale facts from overriding recent observations. Memory becomes actionable — the planner uses it to inform decisions, not just retrieve on search.
+
+### 15.5 Explainability and Unified Timeline
+
+Every significant action produces an explainability record:
+
+- What the user said → interpreted intent → context used → policy decision → tool calls executed → result → why confirmation was/wasn't required
+
+A unified event timeline merges: user requests, LLM decisions, broker actions, automation events, device state changes, errors, secretary notes, and memory updates into one operator-facing view. This builds trust and dramatically improves debugging.
+
+### 15.6 Predictive and Analytical Features
+
+- **Pattern detection:** Occupancy patterns, HVAC inefficiency, manual overrides that repeat, automations users often undo
+- **Recommendation engine:** Propose new automations, scene consolidation, failing-device investigation, alert threshold tuning
+- **Anomaly detection:** Unusual late-night door events, unexpected device offline, repeated failed service calls, missing MQTT chatter
+
+### 15.7 DevOps and Testability
+
+- **Dry-run / simulation mode:** Test tool calls, automation execution, and state transitions without touching real devices
+- **Behavior-level tests:** Ambiguous-command handling, confirmation edge cases, degraded/offline fallbacks, multi-step scene execution
+- **One-command deploy:** Versioned releases with preflight validation, post-deploy health checks, and automatic rollback
+
+### 15.8 External Integrations (Brokered)
+
+High-value integrations that stay behind the Tool Broker abstraction:
+
+- Calendar-aware planning
+- Weather-driven automation
+- Commute / ETA context
+- Local media / TV / speaker control
+- Reminders / task systems
+- Personal daily briefings
+
+All integrations remain tool-mediated, policy-aware, logged, and failure-tolerant.
+
+### 15.9 Recommended Execution Order
+
+| Priority | Focus Area | Depends On |
+|----------|------------|------------|
+| 1 | Finish Jarvis voice validation (P6-10) | iPhone SonoBus |
+| 2 | Explainability + unified timeline + health panel | Existing dashboard |
+| 3 | Memory hygiene + actionable context assembly | Existing memory layers |
+| 4 | House-mode state machine + PolicyGate enrichment | HA automations |
+| 5 | Intent planner + action planning stage | Context assembler |
+| 6 | Anomaly detection + recommendations | Pattern detection |
+| 7 | Dry-run / simulation mode | Behavior tests |
+| 8 | Brokered external integrations | Tool Broker |
+
+> **Full analysis and rationale:** `References/Smart_Home_Software_Expansion_Review.md`
+
+---
+
+## 16. Open Decisions (Pending)
 
 | Decision | Options | Status |
 |----------|---------|--------|
 | Zigbee Hardware | Sonoff ZBDongle-P vs HUSBZB-1 | PENDING |
 | Z-Wave Hardware | Zooz ZST10 vs Aeotec Z-Stick | PENDING |
-| Primary LLM | Llama 3.1 8B | **DECIDED** (DEC-009) |
+| Primary LLM | Tiered: qwen2.5:1.5b (local) + llama3.1:8b (sidecar) | **DECIDED** (DEC-009) |
 | Web Search | Local SearXNG vs DuckDuckGo API | PENDING |
 | Camera Hardware | Reolink vs Amcrest vs Ubiquiti | PENDING |
-| Whisper Model Size | base.en (141MB) | **DECIDED** (DEC-014) |
-| Vector DB | ChromaDB vs manual embeddings | PENDING |
+| Whisper Model | base.en (141MB) | **DECIDED** (DEC-013) |
+| Vector DB | ChromaDB | **DECIDED** (DEC-P06) |
+| Pi OS | Debian Bookworm (not HAOS) | **DECIDED** (DEC-014) |
+| Audio Routing | PipeWire (not BlackHole) | **DECIDED** (DEC-011) |
+| Tool Broker Host | Pi 5 (not Mac) | **DECIDED** (DEC-010) |
+| LLM Response Format | Conversation-first `{text, tool_calls[]}` | **DECIDED** (DEC-008) |
 
 ---
 
@@ -932,8 +1052,11 @@ See `ROADMAPS/2026-03-05_smart_home_master_roadmap.md` for detailed milestones.
 | **`References/Maximum_Push_Autonomous_Secretary_Spec_v1.0.md`** | Autonomous Secretary spec |
 | **`References/Jarvis_Assistant_Architecture_v2.0.md`** | Jarvis real-time voice spec |
 | **`References/Hybrid_HA_Llama_Architecture_v1.0.md`** | HA/LLM separation philosophy |
-| **`References/Explicit_Interface_Contracts_v1.0.md`** | Strict API schemas between all components |
+| **`References/Explicit_Interface_Contracts_v2.0.md`** | Strict API schemas between all components |
 | **`References/Chat_Tier_Packs_Architecture_v1.0.md`** | ChatGPT/Project context mounting system |
+| **`References/Smart_Home_Software_Expansion_Review.md`** | Software expansion analysis + execution order |
+| **`References/smart_home_hardware_BOM_rev5_architecture_correct.md`** | Hardware bill of materials (Rev 5) |
+| **`References/smart_home_max_push_rev3_implementation_blueprint.md`** | Maximum push implementation blueprint (Rev 3) |
 
 ### Companion Documents (SOURCES/)
 
@@ -941,10 +1064,10 @@ See `ROADMAPS/2026-03-05_smart_home_master_roadmap.md` for detailed milestones.
 |----------|---------|--------|
 | `user_personas_and_use_cases.md` | User profiles, daily scenarios, dialog examples | Active |
 | `dashboard_design.md` | Dashboard wireframes, widget specs, view hierarchy | Active |
-| `operational_runbook.md` | Maintenance procedures, troubleshooting, commands | Draft |
+| `operational_runbook.md` | Maintenance procedures, troubleshooting, commands | Active (v2.0) |
 | `automation_catalog.md` | HA automation definitions, trigger/action specs | Draft (placeholder) |
 | `device_inventory.md` | Device list, entity naming, protocol assignments | Draft (placeholder) |
-| `chat_operating_protocol.md` | How to work with Alex in ChatGPT threads | Planned |
+| `chat_operating_protocol.md` | How to work with Alex in ChatGPT threads | Active |
 | `current_state.md` | What is installed, current phase, blockers, next actions | Active |
 | `decisions_log.md` | Locked decisions, non-negotiables, rejected options | Active |
 
@@ -952,7 +1075,7 @@ See `ROADMAPS/2026-03-05_smart_home_master_roadmap.md` for detailed milestones.
 
 | Document | Purpose |
 |----------|--------|
-| `ROADMAPS/2026-03-02_smart_home_master_roadmap.md` | Implementation roadmap |
+| `ROADMAPS/2026-03-05_smart_home_master_roadmap.md` | Implementation roadmap (Rev 6.0) |
 | `ROADMAPS/2026-03-02_parallelization_plan.md` | GitHub issues, agent delegation |
 | `CHECKLISTS/phase*_checklist.md` | Per-phase task lists |
 | `PROGRESS_TRACKERS/smart_home_progress_tracker.md` | Ongoing status |

@@ -1,8 +1,8 @@
 # Smart Home Progress Tracker
 
 **Created:** 2026-03-02  
-**Last Updated:** 2026-03-06  
-**Status:** Active (Rev 10.0 — P1-08 backup done; P3 SUPERSEDED; P9 chat tier packs 100%; Bugs #5/#7 fixed; 87%)  
+**Last Updated:** 2026-03-07  
+**Status:** Active (Rev 11.0 — P10 Software Expansion added; vision Rev 3.0; roadmap Rev 6.0)  
 **Authority:** Vision/specs → Roadmap → **This Tracker** → Current State  
 **Authoritative Roadmap:** `SESSION_ARTIFACTS/ROADMAPS/2026-03-05_smart_home_master_roadmap.md`
 
@@ -21,7 +21,8 @@
 | P7 | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | P8 | Advanced AI Features | 6 | 6 | 🟢 100% |
 | P9 | Chat Tier Packs | 5 | 5 | 🟢 100% |
-| **TOTAL** | | **62** | **54** | **🟢 87%** |
+| P10 | Software Expansion | 8 | 0 | 🔴 0% |
+| **TOTAL** | | **70** | **54** | **🟢 77%** |
 
 **Platform:** Raspberry Pi 5 (aarch64, Debian Bookworm)  
 **Tests:** 249 passing, 0 warnings (pytest, ~24s)  
@@ -190,6 +191,23 @@
 
 ---
 
+## Phase 10: Software Expansion (0/8 = 0%)
+
+| ID | Item | Status | Completed | Notes |
+|----|------|--------|-----------|-------|
+| P10-01 | Explainability Panel + Unified Timeline | ⬜ NOT STARTED | - | Dashboard extension |
+| P10-02 | Memory Hygiene + Context Assembly | ⬜ NOT STARTED | - | Foundation for intelligence layer |
+| P10-03 | House-Mode State Machine | ⬜ NOT STARTED | - | Home/Away/Sleep/Focus/Guest/Travel |
+| P10-04 | Intent Planner + Action Planning | ⬜ NOT STARTED | - | Depends on P10-02, P10-03 |
+| P10-05 | Derived-State Engine | ⬜ NOT STARTED | - | Computed entities from sensor data |
+| P10-06 | Anomaly Detection + Recommendations | ⬜ NOT STARTED | - | Uses behavioral patterns + event log |
+| P10-07 | Dry-Run / Simulation Mode | ⬜ NOT STARTED | - | Test automation without real execution |
+| P10-08 | Brokered External Integrations | ⬜ NOT STARTED | - | Calendar, weather, commute, reminders |
+
+**Phase 10 Notes:** Source: `References/Smart_Home_Software_Expansion_Review.md`. Goal is to evolve the platform from a smart-home stack with an LLM into a stateful, explainable, policy-driven assistant platform. Items ordered by ROI — explainability and memory hygiene first, external integrations last.
+
+---
+
 ## Open Decisions
 
 | Decision ID | Topic | Options | Status | Decided |
@@ -201,6 +219,7 @@
 | DEC-005 | Camera Model | Reolink, Amcrest, Ubiquiti | ⬜ PENDING | - |
 | DEC-006 | Whisper Model Size | base.en (current) | ✅ DECIDED | base.en |
 | DEC-007 | Vector Database | ChromaDB, manual embeddings | ✅ DECIDED | ChromaDB |
+| DEC-015 | Software Expansion Scope | P10 items from Expansion Review | ✅ DECIDED | 8 items (Rev 6.0) |
 
 ---
 
@@ -230,6 +249,7 @@
 | 2026-03-06 | P4 closure sweep | P4-05, P4-06 | Added audit log rotation + 30-day retention in `tool_broker/audit_log.py`; added `deploy/security/security-monitor.sh` alerts (failed auth, new peers, automation errors); added `deploy/security/run-security-audit.sh` with timestamped reports; fixed TTS shell injection in `jarvis/tts_controller.py` and `jarvis_audio/tts.py`; targeted tests passing (21/21). |
 | 2026-03-06 | Deferred-tool removal + P7-03 + P6-07 | P6-07, P7-03 | Removed web_search + create_reminder from REGISTERED_TOOLS and dead main.py branches; updated 4 tests; implemented process_audio_file() with real whisper.cpp asyncio subprocess + model-path derivation; rewrote Modelfile.jarvis to DEC-008 format (text + tool_calls array, 3 HA tools); fixed DEC-007 tracker (ChromaDB decided, in use); 249 tests passing (commits 67efd8f, 0dee927). |
 | 2026-03-06 | Non-HW-blocked sweep | P1-08, P9-01..05, Bug #5, Bug #7 | Created `deploy/backup.sh` (HA+AI_CONTEXT+Docker+audit, 30-day retention); marked P3 SUPERSEDED; created voice test protocol (`jarvis_audio/scripts/voice_test_protocol.sh`); full P9 chat tier pack infrastructure (protocol doc, YAML config, generator, verifier, 5 output files); fixed httpx per-request overhead (lazy persistent clients in 5 files); fixed datetime.utcnow deprecation (10 occurrences in 5 files, 0 pytest warnings); roadmap Rev 5.0; 249 tests, 0 warnings. |
+| 2026-03-07 | P10 + doc updates | - | Added P10 Software Expansion (8 items) to roadmap Rev 6.0. Vision document Rev 3.0: §3 architecture corrected Pi-primary (fixed HAOS→Debian, Mac→Pi, BlackHole→PipeWire), added §15 Software Expansion Vision, updated §14 phases, §16 decisions, Appendix A references. Added DEC-015 (expansion scope). |
 
 ---
 

@@ -2,14 +2,15 @@
 
 **Owner:** Alex  
 **Created:** 2026-03-02  
-**Updated:** 2026-03-06  
-**Status:** Active Roadmap (Rev 5.0)  
+**Updated:** 2026-03-07  
+**Status:** Active Roadmap (Rev 6.0)  
 **Authority:** This is the authoritative roadmap. The authority chain is:  
 **Vision (specs/requirements/sources) → Roadmap (this file) → Progress Tracker → Current State**
 
 > **Rev 1.0–3.0 history:** See `2026-03-02_smart_home_master_roadmap.md` for original planning revisions.  
 > **New in Rev 4.0 (2026-03-05):** Updated all phase statuses to match actual codebase. Added P1-09 (Service Persistence), P2-08 (Dashboard Chat Visibility). Updated P6-02 from BlackHole to PipeWire. Incorporated decisions DEC-009 through DEC-014. Added Known Bugs section. Marked wave parallelization as executed. Updated LOC/test metrics.
 > **New in Rev 5.0 (2026-03-06):** P1-08 done (backup.sh). P3 SUPERSEDED by P6. P6-07 done. P6-10 in-progress (test protocol created). P7/P8 caveats resolved. P9 fully implemented. Bugs #4,#5,#7 fixed. 249 tests, 0 warnings.
+> **New in Rev 6.0 (2026-03-07):** Added Phase 10 (Software Expansion) with 8 items from Software Expansion Review. Added DEC-015. Updated priority order. Vision document updated to Rev 3.0.
 
 ---
 
@@ -26,7 +27,8 @@
 | **P7** | Autonomous Secretary | 7 | 7 | 🟢 100% |
 | **P8** | Advanced AI Features | 6 | 6 | 🟢 100% |
 | **P9** | Chat Tier Packs | 5 | 5 | 🟢 100% |
-| **TOTAL** | | **62** | **54** | **🟢 87%** |
+| **P10** | Software Expansion | 8 | 0 | 🔴 0% (planned) |
+| **TOTAL** | | **70** | **54** | **🟢 77%** |
 
 **Tests:** 249 passing (pytest, ~24s, 0 warnings)  
 **Code:** 12,968 LOC (9,582 source + 3,386 test) across 11 packages  
@@ -509,6 +511,103 @@ WAVE 2 (Executed 2026-03-02):
 
 ---
 
+## Phase 10: Software Expansion (P10) — 0/8 = 0%
+
+**Goal:** Evolve from a smart-home stack with an LLM into a stateful, explainable, policy-driven assistant platform.  
+**Source:** `References/Smart_Home_Software_Expansion_Review.md`  
+**Dependencies:** P2 (Tool Broker), P6 (Jarvis voice), P8 (memory layers)  
+**Added:** 2026-03-07 (Rev 6.0)
+
+### P10-01: Explainability Panel + Unified Event Timeline — ⬜ NOT STARTED
+**Effort:** 4-6h | **Complexity:** MEDIUM  
+**Dependencies:** Dashboard (P2-08), audit trail
+
+- [ ] Add explainability record per action: user input → intent → context → policy → execution → result
+- [ ] Merge user requests, LLM decisions, broker actions, HA events, errors, secretary notes into unified timeline
+- [ ] Add system-health panel: all service statuses, latencies, recent failure counts, restart history
+- [ ] Expose in dashboard as new tab/view
+
+---
+
+### P10-02: Memory Hygiene + Actionable Context Assembly — ⬜ NOT STARTED
+**Effort:** 6-8h | **Complexity:** HIGH  
+**Dependencies:** memory/ modules (P8-01)
+
+- [ ] Add confidence, freshness, source tracking, and decay policy to stored facts
+- [ ] Implement contradiction detection (new fact vs existing)
+- [ ] Split memory into explicit classes: user preferences, device quirks, recurring routines, episodic events
+- [ ] Build context assembler: before LLM inference, assemble compact state packet (device states, time, mode, occupancy, recent commands, relevant memories)
+- [ ] Make context_builder.py produce policy-relevant context, not just vector search results
+
+---
+
+### P10-03: House-Mode State Machine — ⬜ NOT STARTED
+**Effort:** 6-8h | **Complexity:** HIGH  
+**Dependencies:** HA automations (P1-07), PolicyGate (P2-04)
+
+- [ ] Define formal modes: Home, Away, Sleep, Focus, Guest, Travel
+- [ ] Implement mode transitions with coordinated actions (lights, climate, locks, cameras, notifications)
+- [ ] Extend PolicyGate to be mode-aware: what is allowed depends on current mode + time + occupancy
+- [ ] Add mode display and manual override in dashboard
+- [ ] Store mode history in event log
+
+---
+
+### P10-04: Intent Planner + Action Planning Stage — ⬜ NOT STARTED
+**Effort:** 8-12h | **Complexity:** HIGH  
+**Dependencies:** P10-02 (context assembly), P10-03 (house modes)
+
+- [ ] Add intent classifier before LLM inference (simple/multi-step/informational/control)
+- [ ] For multi-step requests (e.g., "set up movie night"), generate action plan before executing
+- [ ] Validate plan against PolicyGate constraints before execution
+- [ ] Add capability-scoped prompts: voice assistant, dashboard copilot, secretary, diagnostic, automation planner
+- [ ] Log reasoning trace for each decision
+
+---
+
+### P10-05: Derived-State Engine — ⬜ NOT STARTED
+**Effort:** 4-6h | **Complexity:** MEDIUM  
+**Dependencies:** HA entity registry, event log
+
+- [ ] Implement computed entities: likely_sleeping, likely_cooking, room_occupancy, unusual_power_draw, device_instability
+- [ ] Feed derived states into context assembler and PolicyGate
+- [ ] Expose derived states in dashboard health panel
+
+---
+
+### P10-06: Anomaly Detection + Recommendation Engine — ⬜ NOT STARTED
+**Effort:** 6-8h | **Complexity:** MEDIUM  
+**Dependencies:** P8-06 (behavioral patterns), event log
+
+- [ ] Detect anomalies: unusual door events, unexpected device offline, repeated failed calls, missing MQTT chatter
+- [ ] Implement recommendation engine: propose new automations, scene consolidation, stale automation cleanup
+- [ ] Surface anomalies and recommendations in dashboard and daily digest
+
+---
+
+### P10-07: Dry-Run / Simulation Mode — ⬜ NOT STARTED
+**Effort:** 4-6h | **Complexity:** MEDIUM  
+**Dependencies:** Tool Broker (P2-04)
+
+- [ ] Add `dry_run=true` parameter to Tool Broker — validates and logs without executing
+- [ ] Simulate device-state transitions for testing automation logic
+- [ ] Add behavior-level tests: ambiguous commands, confirmation edge cases, degraded fallbacks, multi-step scenes
+- [ ] Integrate with CI test suite
+
+---
+
+### P10-08: Brokered External Integrations — ⬜ NOT STARTED
+**Effort:** 6-8h | **Complexity:** MEDIUM  
+**Dependencies:** Tool Broker (P2-04), tool_definitions.json
+
+- [ ] Add calendar integration (tool-mediated, policy-aware)
+- [ ] Add weather-driven automation context
+- [ ] Add commute / ETA context
+- [ ] Add reminder / task system tool
+- [ ] All integrations stay behind broker: validated, logged, failure-tolerant
+
+---
+
 ## Known Bugs (from 2026-03-04 assessment)
 
 These bugs were identified during the full codebase assessment.
@@ -563,12 +662,13 @@ These bugs were identified during the full codebase assessment.
 | DEC-012 | SonoBus Integration | PipeWire JACK shim via LD_LIBRARY_PATH | 2026-03-04 |
 | DEC-013 | Whisper Model | base.en (141MB) | 2026-03-04 |
 | DEC-014 | Pi OS | Debian Bookworm (not HAOS) | 2026-03-03 |
+| DEC-015 | Software Expansion Scope | Phase 10 items from Software Expansion Review (8 items) | 2026-03-07 |
 
 ---
 
 ## Recommended Priority Order
 
-Given the current state (2026-03-06), remaining work is minimal:
+Given the current state (2026-03-07), work falls into three tiers:
 
 ### 1. Tailscale ACL Apply & Tagging (P4-02 manual) — ~20m
 Paste ACL policy in admin console and assign device tags to enforce policy live.
@@ -576,10 +676,22 @@ Paste ACL policy in admin console and assign device tags to enforce policy live.
 ### 2. Live Voice Testing (P6-10 Phase B) — ~2h
 Connect iPhone SonoBus, run `voice_test_protocol.sh`, execute Phase B manual tests.
 
-### 3. Hardware Acquisition (P1-04/05, P5) — when ready
+### 3. Software Expansion — Phase 10 (ordered by ROI)
+| Order | Item | Effort | Why First |
+|-------|------|--------|-----------|
+| 3a | P10-01: Explainability + timeline | 4-6h | Builds on existing dashboard + audit; immediate trust/debug value |
+| 3b | P10-02: Memory hygiene + context assembly | 6-8h | Foundation for all downstream intelligence |
+| 3c | P10-03: House-mode state machine | 6-8h | Replaces ad-hoc automations with clean abstraction |
+| 3d | P10-04: Intent planner + action planning | 8-12h | Needs context assembler + house modes first |
+| 3e | P10-05: Derived-state engine | 4-6h | Feeds intelligence layer and PolicyGate |
+| 3f | P10-06: Anomaly detection + recommendations | 6-8h | Uses behavioral patterns + event log |
+| 3g | P10-07: Dry-run / simulation mode | 4-6h | Testability for all new automation logic |
+| 3h | P10-08: Brokered external integrations | 6-8h | Calendar, weather, commute, reminders |
+
+### 4. Hardware Acquisition (P1-04/05, P5) — when ready
 Zigbee/Z-Wave dongles for P1, cameras for P5.
 
-### 4. Feature Enhancements (Tier 3) — ongoing
+### 5. Tier 3 Enhancements — ongoing
 SSE streaming, async client, dashboard split, complexity classifier tests, health watchdog.
 
 ---
