@@ -41,15 +41,16 @@ If documents disagree, the higher-authority document wins.
 
 ## 3. Current State
 
-**As of 2026-03-06:**
-- **41/62 items complete (66%)** — P2, P4, P7, P8 fully done; P1 and P6 in progress; P9 not started
+**As of 2026-03-07:**
+- **54/70 items complete (77%)** — P2, P4, P7, P8, P9 fully done; P1 (78%) and P6 (90%) in progress; P10 planned (8 items); P5 hardware-blocked
 - Pi 5 running Debian Bookworm with HA (Docker), Tool Broker, Ollama, PipeWire, Dashboard
 - Tiered LLM: qwen2.5:1.5b (local, Pi) + llama3.1:8b (sidecar, Mac via Tailscale)
 - SonoBus built from source + PipeWire JACK shim audio routing
 - Dashboard chat shows ALL LLM interactions regardless of origin (curl, Jarvis, API)
 - 5 systemd user units for service persistence + deploy/bootstrap.sh
-- 248 tests passing, 12,968 LOC Python (9,582 source + 3,386 test)
+- 249 tests (244 pass in offline CI; 5 VectorMemory tests require HuggingFace network access)
 - Dashboard with chat, tier badges, source badges, activity log deployed on Pi
+- Vision Rev 3.0 • Roadmap Rev 6.0 • Tracker Rev 11.0
 
 **Open Decisions:** See `SOURCES/decisions_log.md`  
 **Detailed State:** See `SESSION_ARTIFACTS/current_state.md`
